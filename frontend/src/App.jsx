@@ -95,9 +95,9 @@ function MenuDeAbas() {
                 href="https://drive.google.com/drive/folders/1HEhcNDScL0ZXmd5mq-tNcacKSOn16rdi?usp=sharing"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="btn-usuario"
+                className="btn-usuario btn-usuario-compacto"
               >
-                📁 Google Drive
+                Drive
               </a>
               <button onClick={sair} className="btn-usuario">
                 Sair

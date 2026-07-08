@@ -272,6 +272,11 @@ body {
   color: white;
 }
 
+.btn-usuario-compacto {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
 .conteudo-principal {
   flex: 1;
   padding: 20px;

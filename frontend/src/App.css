@@ -183,22 +183,36 @@ body {
 .navbar-container {
   max-width: 1000px;
   margin: 0 auto;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  height: 60px;
 }
 
-.navbar-logo {
+.navbar-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 0;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.15);
+}
+
+.hamburger-btn {
+  display: none;
+  background: none;
+  border: none;
   color: white;
-  font-size: 18px;
-  margin: 0;
-  letter-spacing: 1px;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.menu-colapsavel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
 }
 
 .abas-grupo {
   display: flex;
-  height: 100%;
 }
 
 .aba-link {
@@ -206,11 +220,12 @@ body {
   text-decoration: none;
   font-weight: bold;
   font-size: 15px;
-  padding: 0 20px;
+  padding: 14px 20px;
   display: flex;
   align-items: center;
   border-bottom: 4px solid transparent; /* Linha invisível embaixo */
   transition: all 0.3s ease;
+  white-space: nowrap;
 }
 
 .aba-link:hover {
@@ -224,7 +239,97 @@ body {
   background-color: rgba(255, 255, 255, 0.05);
 }
 
+.usuario-area {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.usuario-nome {
+  color: #c8e6c9;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.btn-usuario {
+  padding: 6px 14px;
+  background-color: transparent;
+  border: 1px solid #c8e6c9;
+  color: #c8e6c9;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: bold;
+  text-decoration: none;
+  white-space: nowrap;
+  display: inline-block;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+.btn-usuario:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+  color: white;
+}
+
 .conteudo-principal {
   flex: 1;
   padding: 20px;
+}
+
+/* --- RESPONSIVO: CELULAR E TABLET --- */
+@media (max-width: 860px) {
+  .hamburger-btn {
+    display: block;
+  }
+
+  .navbar-topo {
+    padding: 14px 0;
+  }
+
+  .menu-colapsavel {
+    display: none;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    padding-bottom: 15px;
+  }
+
+  .menu-colapsavel.aberto {
+    display: flex;
+  }
+
+  .abas-grupo {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .aba-link {
+    padding: 14px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-left: 4px solid transparent;
+  }
+
+  .aba-link.ativa {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-left: 4px solid white;
+  }
+
+  .usuario-area {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    gap: 10px;
+    padding: 15px 10px 5px 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+    margin-top: 5px;
+  }
+
+  .usuario-nome {
+    text-align: center;
+  }
+
+  .btn-usuario {
+    text-align: center;
+  }
 }

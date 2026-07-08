@@ -1,0 +1,30 @@
+# Dependências
+node_modules/
+
+# Segredos - NUNCA versionar
+.env
+.env.local
+backend/credentials.json
+
+# Build
+frontend/dist/
+frontend/dist-ssr/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Claude Code (config local, específica da máquina)
+.claude/settings.local.json
+
+# Editor / SO
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

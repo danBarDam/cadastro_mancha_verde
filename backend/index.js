@@ -147,9 +147,13 @@ app.post('/cadastro', upload.single('foto'), async (req, res) => {
     const cpfSemPontos = cpf.replace(/\D/g, '');
     const telefoneSemPontos = (telefone || '').replace(/\D/g, '');
 
+    const idDuplicado = id && linhasExistentes.some(row => row[0] === id);
     const cpfDuplicado = linhasExistentes.some(row => row[3] && row[3].replace(/\D/g, '') === cpfSemPontos);
     const telefoneDuplicado = telefoneSemPontos && linhasExistentes.some(row => row[4] && row[4].replace(/\D/g, '') === telefoneSemPontos);
 
+    if (idDuplicado) {
+      return res.status(409).json({ error: 'Já existe um cadastro com este número de inscrição (ID).' });
+    }
     if (cpfDuplicado) {
       return res.status(409).json({ error: 'Já existe um cadastro com este CPF.' });
     }

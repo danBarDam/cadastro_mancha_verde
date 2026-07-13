@@ -133,45 +133,49 @@ app.post('/cadastro', upload.single('foto'), async (req, res) => {
     const { id, tipoCadastro, nome, cpf, telefone, cep, rua, bairro, numero, complemento, ala, data } = req.body;
     const foto = req.file;
 
-    if (!nome || !cpf || !foto) {
+    if (!nome || !cpf) {
       return res.status(400).json({ error: 'Dados essenciais incompletos.' });
     }
 
-    // 1. Converter a imagem em Base64 e enviar para o Microserviço no Apps Script
-    const imageBase64 = foto.buffer.toString('base64');
-    
-    // Utiliza a API nativa fetch do Node.js
-    // 1. VAMOS CHECAR SE O NODE ESTÁ LENDO O SEU .ENV CORRETAMENTE
-    console.log("⚠️ ID DA PASTA NO ENV:", process.env.DRIVE_FOLDER_ID);
+    let fotoUrl = '';
 
-    const responseAppScript = await fetch(process.env.URL_WEB_APP, {
-      method: 'POST',
-      body: JSON.stringify({
-        base64: imageBase64,
-        mimeType: foto.mimetype,
-        filename: `Inscricao_${id}_${nome}.jpg`,
-        folderId: process.env.DRIVE_FOLDER_ID
-      })
-    });
-    
-    const scriptData = await responseAppScript.json();
+    // 1. Se uma foto foi enviada, converte em Base64 e sobe pro Microserviço no Apps Script
+    if (foto) {
+      const imageBase64 = foto.buffer.toString('base64');
 
-    // 2. VAMOS CHECAR QUAL É A DESCRIÇÃO EXATA DO ERRO DO GOOGLE
-    console.log("🚨 RETORNO DO APPS SCRIPT:", scriptData);
+      // Utiliza a API nativa fetch do Node.js
+      // 1. VAMOS CHECAR SE O NODE ESTÁ LENDO O SEU .ENV CORRETAMENTE
+      console.log("⚠️ ID DA PASTA NO ENV:", process.env.DRIVE_FOLDER_ID);
 
-    if (!scriptData.sucesso) {
-      // Se deu erro lá no Google, interrompe o código e manda o erro pro React
-      return res.status(500).json({ error: 'Erro ao salvar no Drive: ' + scriptData.erro });
+      const responseAppScript = await fetch(process.env.URL_WEB_APP, {
+        method: 'POST',
+        body: JSON.stringify({
+          base64: imageBase64,
+          mimeType: foto.mimetype,
+          filename: `Inscricao_${id}_${nome}.jpg`,
+          folderId: process.env.DRIVE_FOLDER_ID
+        })
+      });
+
+      const scriptData = await responseAppScript.json();
+
+      // 2. VAMOS CHECAR QUAL É A DESCRIÇÃO EXATA DO ERRO DO GOOGLE
+      console.log("🚨 RETORNO DO APPS SCRIPT:", scriptData);
+
+      if (!scriptData.sucesso) {
+        // Se deu erro lá no Google, interrompe o código e manda o erro pro React
+        return res.status(500).json({ error: 'Erro ao salvar no Drive: ' + scriptData.erro });
+      }
+
+      // ⚠️ ATENÇÃO: NÃO APAGUE o restante do seu código a partir daqui!
+      // (A parte onde você salva na planilha e dá o res.json(sucesso) continua igualzinha).
+
+      if (!scriptData.success) {
+        throw new Error('Falha no Webhook do Drive: ' + scriptData.error);
+      }
+
+      fotoUrl = scriptData.url;
     }
-
-    // ⚠️ ATENÇÃO: NÃO APAGUE o restante do seu código a partir daqui! 
-    // (A parte onde você salva na planilha e dá o res.json(sucesso) continua igualzinha).
-    
-    if (!scriptData.success) {
-      throw new Error('Falha no Webhook do Drive: ' + scriptData.error);
-    }
-
-    const fotoUrl = scriptData.url;
 
     // 2. Salvar todos os dados na Planilha (mantido via Service Account)
     // A coluna N (depois da foto) começa sempre como "Não" - a renovação é
@@ -219,7 +223,12 @@ app.get('/buscar', async (req, res) => {
 
     const resultados = rows.filter((row, index) => {
       if (index === 0) return false;
-      return row.some(celula => {
+      // Busca apenas nos campos que identificam a pessoa (id, nome, cpf, telefone).
+      // Antes comparava com a linha inteira, o que incluía cep, data e o link da
+      // foto (uma string cheia de números/letras aleatórias), fazendo qualquer
+      // termo "bater" com quase todo mundo.
+      const camposBusca = [row[0], row[2], row[3], row[4]];
+      return camposBusca.some(celula => {
         if (!celula) return false;
         const textoCelula = celula.toString().toLowerCase();
         const celulaSemPontos = textoCelula.replace(/\D/g, '');

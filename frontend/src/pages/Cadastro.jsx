@@ -102,14 +102,9 @@ function Cadastro() {
 
   const enviarCadastro = async (e) => {
     e.preventDefault();
-    if (!fotoSrc) {
-      setStatus('Por favor, capture a foto antes de enviar.');
-      return;
-    }
     setStatus('Processando inscrição...');
 
     try {
-      const arquivoFoto = dataURLParaArquivo(fotoSrc, `${id}-foto.jpg`);
       const formData = new FormData();
       formData.append('id', id);
       formData.append('tipoCadastro', tipoCadastro);
@@ -123,7 +118,10 @@ function Cadastro() {
       formData.append('complemento', complemento);
       formData.append('ala', ala);
       formData.append('data', data);
-      formData.append('foto', arquivoFoto);
+      if (fotoSrc) {
+        const arquivoFoto = dataURLParaArquivo(fotoSrc, `${id}-foto.jpg`);
+        formData.append('foto', arquivoFoto);
+      }
 
       await api.post('/cadastro', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }

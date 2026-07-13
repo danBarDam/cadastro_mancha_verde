@@ -19,7 +19,9 @@ function Relatorios() {
   const puxarDados = async () => {
     try {
       const resposta = await api.get('/dados-relatorio');
-      setComponentes(resposta.data.componentes || []);
+      // Relatórios e PDFs consideram apenas os cadastros marcados como renovados
+      const componentesRenovados = (resposta.data.componentes || []).filter((c) => c.renovado === 'Sim');
+      setComponentes(componentesRenovados);
       setLimites(resposta.data.limitesAlas || {});
       setPresencas(resposta.data.dadosPresencas || []);
       setHistoricoAlas(resposta.data.historicoAlas || []);

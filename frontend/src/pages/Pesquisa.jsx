@@ -10,6 +10,18 @@ function Pesquisa() {
   const [erro, setErro] = useState('');
 
   const [componenteEdicao, setComponenteEdicao] = useState(null);
+  const [frequencias, setFrequencias] = useState({});
+
+  const buscarFrequencias = (lista) => {
+    lista.forEach(async (componente) => {
+      try {
+        const resposta = await api.get(`/frequencia/${componente.id}`);
+        setFrequencias((prev) => ({ ...prev, [componente.id]: resposta.data }));
+      } catch (err) {
+        console.error('Erro ao buscar frequência:', err);
+      }
+    });
+  };
 
   const lidarComBusca = async (e) => {
     e.preventDefault();
@@ -18,11 +30,13 @@ function Pesquisa() {
     setCarregando(true);
     setErro('');
     setResultados([]);
+    setFrequencias({});
 
     try {
       // Faz a requisição enviando o termo na URL (Query Parameter)
       const resposta = await api.get(`/buscar?termo=${termoBusca}`);
       setResultados(resposta.data);
+      buscarFrequencias(resposta.data);
 
       if (resposta.data.length === 0) {
         setErro('Nenhum componente cadastrado foi encontrado.');
@@ -44,6 +58,20 @@ function Pesquisa() {
     } catch (err) {
       console.error('Erro ao excluir cadastro:', err);
       alert('Erro ao excluir o cadastro. Tente novamente.');
+    }
+  };
+
+  const alternarRenovacao = async (componente) => {
+    const novoValor = componente.renovado === 'Sim' ? 'Não' : 'Sim';
+
+    try {
+      await api.put(`/marcar-renovacao/${componente.id}`, { renovado: novoValor });
+      setResultados((prev) => prev.map((item) => (
+        item.id === componente.id ? { ...item, renovado: novoValor } : item
+      )));
+    } catch (err) {
+      console.error('Erro ao marcar renovação:', err);
+      alert('Erro ao atualizar a renovação. Tente novamente.');
     }
   };
 
@@ -117,12 +145,18 @@ function Pesquisa() {
               <p style={{ margin: '0 0 5px 0', fontSize: '14px', color: '#64748b' }}>
                 <strong>Inscrição:</strong> #{componente.id}
               </p>
-              <p style={{ margin: '0', fontSize: '14px', color: '#64748b' }}>
+              <p style={{ margin: '0 0 5px 0', fontSize: '14px', color: '#64748b' }}>
                 <strong>Endereço:</strong> {componente.rua}, {componente.numero} - {componente.bairro}
+              </p>
+              <p style={{ margin: '0', fontSize: '14px', color: '#64748b' }}>
+                <strong>Frequência:</strong>{' '}
+                {frequencias[componente.id]
+                  ? `${frequencias[componente.id].presencas} presenças / ${frequencias[componente.id].ausencias} faltas`
+                  : 'Calculando...'}
               </p>
             </div>
 
-            {/* Crachá da Ala */}
+            {/* Crachá da Ala e Renovação */}
             <div style={{ textAlign: 'right', minWidth: '150px' }}>
               <span style={{
                 backgroundColor: '#e8f5e9',
@@ -136,6 +170,19 @@ function Pesquisa() {
               }}>
                 ALA: {componente.ala}
               </span>
+              <br />
+              <span style={{
+                backgroundColor: componente.renovado === 'Sim' ? '#e8f5e9' : '#f1f5f9',
+                color: componente.renovado === 'Sim' ? '#005c33' : '#64748b',
+                padding: '6px 12px',
+                borderRadius: '20px',
+                fontWeight: 'bold',
+                fontSize: '13px',
+                display: 'inline-block',
+                marginBottom: '5px'
+              }}>
+                RENOVADO: {componente.renovado === 'Sim' ? 'SIM' : 'NÃO'}
+              </span>
               <div style={{ fontSize: '12px', color: '#94a3b8' }}>Cadastrado em: {componente.data}</div>
             </div>
 
@@ -143,6 +190,12 @@ function Pesquisa() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <button onClick={() => setComponenteEdicao(componente)} style={{ padding: '8px 12px', backgroundColor: '#f59e0b', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
                 ✏️ Editar
+              </button>
+              <button
+                onClick={() => alternarRenovacao(componente)}
+                style={{ padding: '8px 12px', backgroundColor: componente.renovado === 'Sim' ? '#64748b' : '#005c33', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+              >
+                {componente.renovado === 'Sim' ? '↩️ Desmarcar Renovação' : '✅ Marcar Renovação'}
               </button>
               <button onClick={() => excluirCadastro(componente.id)} style={{ padding: '8px 12px', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
                 🗑️ Excluir

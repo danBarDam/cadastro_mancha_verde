@@ -174,13 +174,15 @@ app.post('/cadastro', upload.single('foto'), async (req, res) => {
     const fotoUrl = scriptData.url;
 
     // 2. Salvar todos os dados na Planilha (mantido via Service Account)
+    // A coluna N (depois da foto) começa sempre como "Não" - a renovação é
+    // marcada manualmente depois, pela tela de Pesquisa.
     const dadosParaSalvar = [
-      id, tipoCadastro, nome, cpf, telefone, cep, rua, bairro, numero, complemento, ala, data, fotoUrl
+      id, tipoCadastro, nome, cpf, telefone, cep, rua, bairro, numero, complemento, ala, data, fotoUrl, 'Não'
     ];
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.SPREADSHEET_ID,
-      range: 'Inscricoes!A:L',
+      range: 'Inscricoes!A:N',
       valueInputOption: 'USER_ENTERED',
       requestBody: {
         values: [dadosParaSalvar],
@@ -206,7 +208,7 @@ app.get('/buscar', async (req, res) => {
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.SPREADSHEET_ID,
-      range: 'Inscricoes!A:M', // <--- MUDOU DE L PARA M AQUI
+      range: 'Inscricoes!A:N', // Coluna N = renovado (Sim/Não)
     });
 
     const rows = response.data.values;
@@ -239,7 +241,7 @@ app.get('/buscar', async (req, res) => {
       ala: row[10],
       data: row[11],
       fotoUrl: row[12],
-      
+      renovado: row[13] || 'Não',
     }));
 
     res.json(dadosFormatados);
@@ -253,7 +255,7 @@ app.get('/buscar', async (req, res) => {
 app.get('/dados-relatorio', async (req, res) => {
   try {
     const [responseInscritos, responseLimites] = await Promise.all([
-      sheets.spreadsheets.values.get({ spreadsheetId: process.env.SPREADSHEET_ID, range: 'Inscricoes!A:M' }),
+      sheets.spreadsheets.values.get({ spreadsheetId: process.env.SPREADSHEET_ID, range: 'Inscricoes!A:N' }),
       sheets.spreadsheets.values.get({ spreadsheetId: process.env.SPREADSHEET_ID, range: 'ConfigAlas!A:B' }).catch(() => ({ data: { values: [] } }))
     ]);
 
@@ -268,7 +270,7 @@ app.get('/dados-relatorio', async (req, res) => {
     const linhasAlas = responseAlas.data.values || [];
 
     const componentes = linhasInscritos.length > 1 ? linhasInscritos.slice(1).map(row => ({
-      id: row[0] || '', nome: row[2] || '', cpf: row[3] || '', telefone: row[4] || 'Não informado', ala: row[10] || 'Sem Ala', fotoUrl: row[12] || ''
+      id: row[0] || '', nome: row[2] || '', cpf: row[3] || '', telefone: row[4] || 'Não informado', ala: row[10] || 'Sem Ala', fotoUrl: row[12] || '', renovado: row[13] || 'Não'
     })) : [];
 
     const limitesAlas = {};
@@ -542,7 +544,7 @@ app.put('/atualizar-cadastro/:id', upload.single('foto'), async (req, res) => {
     // 1. Localiza a linha do cadastro pelo ID (coluna A)
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.SPREADSHEET_ID,
-      range: 'Inscricoes!A:M',
+      range: 'Inscricoes!A:N',
     });
 
     const linhas = response.data.values || [];
@@ -553,6 +555,7 @@ app.put('/atualizar-cadastro/:id', upload.single('foto'), async (req, res) => {
     }
 
     let fotoUrl = linhas[indiceLinha][12] || '';
+    const renovado = linhas[indiceLinha][13] || 'Não'; // Edição não mexe na renovação
 
     // 2. Se uma nova foto foi enviada, sobe pro Drive via o mesmo Web App do cadastro
     if (novaFoto) {
@@ -578,10 +581,10 @@ app.put('/atualizar-cadastro/:id', upload.single('foto'), async (req, res) => {
     const linhaPlanilha = indiceLinha + 1; // Sheets é 1-indexado
     await sheets.spreadsheets.values.update({
       spreadsheetId: process.env.SPREADSHEET_ID,
-      range: `Inscricoes!A${linhaPlanilha}:M${linhaPlanilha}`,
+      range: `Inscricoes!A${linhaPlanilha}:N${linhaPlanilha}`,
       valueInputOption: 'USER_ENTERED',
       requestBody: {
-        values: [[id, tipoCadastro, nome, cpf, telefone, cep, rua, bairro, numero, complemento, ala, data, fotoUrl]],
+        values: [[id, tipoCadastro, nome, cpf, telefone, cep, rua, bairro, numero, complemento, ala, data, fotoUrl, renovado]],
       },
     });
 
@@ -592,6 +595,83 @@ app.put('/atualizar-cadastro/:id', upload.single('foto'), async (req, res) => {
   }
 });
 
+// --- ROTA 13: Marcar/Desmarcar a renovação do cadastro (coluna N) ---
+app.put('/marcar-renovacao/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { renovado } = req.body;
+
+    if (renovado !== 'Sim' && renovado !== 'Não') {
+      return res.status(400).json({ error: 'Valor de renovado inválido. Use "Sim" ou "Não".' });
+    }
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.SPREADSHEET_ID,
+      range: 'Inscricoes!A:A',
+    });
+
+    const linhas = response.data.values || [];
+    const indiceLinha = linhas.findIndex(row => row[0] === id);
+
+    if (indiceLinha === -1) {
+      return res.status(404).json({ error: 'Cadastro não encontrado.' });
+    }
+
+    const linhaPlanilha = indiceLinha + 1; // Sheets é 1-indexado
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: process.env.SPREADSHEET_ID,
+      range: `Inscricoes!N${linhaPlanilha}`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: {
+        values: [[renovado]],
+      },
+    });
+
+    res.json({ success: true, renovado });
+  } catch (error) {
+    console.error('Erro ao marcar renovação:', error);
+    res.status(500).json({ error: 'Erro interno ao marcar renovação.' });
+  }
+});
+
+// --- ROTA 14: Frequência histórica de um componente (presenças e faltas) ---
+app.get('/frequencia/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const idArquivoPresencas = process.env.PRESENCAS_SPREADSHEET_ID;
+
+    // 1. Lista as abas de ensaio já registradas (cada ensaio vira uma aba com o nome da data;
+    // "Geral" e "Alas" são abas de controle, não contam como ensaios individuais)
+    const planilhaInfo = await sheets.spreadsheets.get({ spreadsheetId: idArquivoPresencas });
+    const abasDeEnsaio = (planilhaInfo.data.sheets || [])
+      .map(aba => aba.properties.title)
+      .filter(titulo => titulo !== 'Geral' && titulo !== 'Alas');
+
+    if (abasDeEnsaio.length === 0) {
+      return res.json({ presencas: 0, ausencias: 0, totalEnsaios: 0 });
+    }
+
+    // 2. Busca a lista nominal (coluna A = ID do componente presente) de todas as abas de uma vez
+    const respostaLote = await sheets.spreadsheets.values.batchGet({
+      spreadsheetId: idArquivoPresencas,
+      ranges: abasDeEnsaio.map(titulo => `${titulo}!A2:A`),
+    });
+
+    let presencas = 0;
+    (respostaLote.data.valueRanges || []).forEach(intervalo => {
+      const idsPresentes = (intervalo.values || []).map(linha => linha[0]);
+      if (idsPresentes.includes(id)) presencas += 1;
+    });
+
+    const totalEnsaios = abasDeEnsaio.length;
+    const ausencias = totalEnsaios - presencas;
+
+    res.json({ presencas, ausencias, totalEnsaios });
+  } catch (error) {
+    console.error('Erro ao calcular frequência:', error);
+    res.status(500).json({ error: 'Erro interno ao calcular frequência.' });
+  }
+});
 
 // --- INICIALIZAÇÃO DO SERVIDOR ---
 // O sistema utilizará a variável PORT que já foi declarada no topo do arquivo

@@ -5,6 +5,7 @@ import ModalEdicaoCadastro from '../components/ModalEdicaoCadastro';
 
 function Pesquisa() {
   const [termoBusca, setTermoBusca] = useState('');
+  const [campoBusca, setCampoBusca] = useState('todos');
   const [resultados, setResultados] = useState([]);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState('');
@@ -33,8 +34,8 @@ function Pesquisa() {
     setFrequencias({});
 
     try {
-      // Faz a requisição enviando o termo na URL (Query Parameter)
-      const resposta = await api.get(`/buscar?termo=${termoBusca}`);
+      // Faz a requisição enviando o termo e o campo escolhido na URL (Query Parameters)
+      const resposta = await api.get(`/buscar?termo=${encodeURIComponent(termoBusca)}&campo=${campoBusca}`);
       setResultados(resposta.data);
       buscarFrequencias(resposta.data);
 
@@ -84,6 +85,17 @@ function Pesquisa() {
 
       {/* Formulário de Busca */}
       <form onSubmit={lidarComBusca} style={{ display: 'flex', gap: '10px', marginBottom: '40px' }}>
+        <select
+          className="form-input"
+          value={campoBusca}
+          onChange={(e) => setCampoBusca(e.target.value)}
+          style={{ width: '140px', height: '45px', fontSize: '16px' }}
+        >
+          <option value="todos">Todos</option>
+          <option value="id">ID</option>
+          <option value="nome">Nome</option>
+          <option value="cpf">CPF</option>
+        </select>
         <input
           type="text"
           className="form-input"

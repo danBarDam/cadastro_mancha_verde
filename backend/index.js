@@ -206,7 +206,7 @@ const PORT = process.env.PORT || 5174;
 // --- ROTA 4: Buscar componentes por Nome ou CPF ---
 app.get('/buscar', async (req, res) => {
   try {
-    const { termo } = req.query;
+    const { termo, campo } = req.query;
 
     if (!termo) return res.status(400).json({ error: 'Termo de busca não informado.' });
 
@@ -221,13 +221,20 @@ app.get('/buscar', async (req, res) => {
     const termoTratado = termo.toLowerCase().trim();
     const termoSemPontos = termoTratado.replace(/\D/g, '');
 
+    // Colunas que identificam a pessoa: id, nome, cpf, telefone.
+    // Antes a busca comparava com a linha inteira, o que incluía cep, data e o
+    // link da foto (uma string cheia de números/letras aleatórias), fazendo
+    // qualquer termo "bater" com quase todo mundo.
+    const colunasPorCampo = {
+      id: [row => row[0]],
+      nome: [row => row[2]],
+      cpf: [row => row[3]],
+    };
+    const obterCelulas = colunasPorCampo[campo] || [row => row[0], row => row[2], row => row[3], row => row[4]];
+
     const resultados = rows.filter((row, index) => {
       if (index === 0) return false;
-      // Busca apenas nos campos que identificam a pessoa (id, nome, cpf, telefone).
-      // Antes comparava com a linha inteira, o que incluía cep, data e o link da
-      // foto (uma string cheia de números/letras aleatórias), fazendo qualquer
-      // termo "bater" com quase todo mundo.
-      const camposBusca = [row[0], row[2], row[3], row[4]];
+      const camposBusca = obterCelulas.map(obter => obter(row));
       return camposBusca.some(celula => {
         if (!celula) return false;
         const textoCelula = celula.toString().toLowerCase();

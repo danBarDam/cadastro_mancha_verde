@@ -251,6 +251,13 @@ app.get('/buscar', async (req, res) => {
   }
 });
 
+// Converte "dd/mm/aaaa" num Date, para poder ordenar cronologicamente
+const converterDataBR = (str) => {
+  if (!str || !str.includes('/')) return new Date(0);
+  const [dia, mes, ano] = str.split('/');
+  return new Date(`${ano}-${mes}-${dia}`);
+};
+
 // --- ROTA 5: Busca Dados Cadastrais e Histórico ---
 app.get('/dados-relatorio', async (req, res) => {
   try {
@@ -259,15 +266,8 @@ app.get('/dados-relatorio', async (req, res) => {
       sheets.spreadsheets.values.get({ spreadsheetId: process.env.SPREADSHEET_ID, range: 'ConfigAlas!A:B' }).catch(() => ({ data: { values: [] } }))
     ]);
 
-    const [responseGeral, responseAlas] = await Promise.all([
-      sheets.spreadsheets.values.get({ spreadsheetId: process.env.PRESENCAS_SPREADSHEET_ID, range: 'Geral!A:C' }).catch(() => ({ data: { values: [] } })),
-      sheets.spreadsheets.values.get({ spreadsheetId: process.env.PRESENCAS_SPREADSHEET_ID, range: 'Alas!A:D' }).catch(() => ({ data: { values: [] } }))
-    ]);
-
     const linhasInscritos = responseInscritos.data.values || [];
     const linhasLimites = responseLimites.data.values || [];
-    const linhasGeral = responseGeral.data.values || [];
-    const linhasAlas = responseAlas.data.values || [];
 
     const componentes = linhasInscritos.length > 1 ? linhasInscritos.slice(1).map(row => ({
       id: row[0] || '', nome: row[2] || '', cpf: row[3] || '', telefone: row[4] || 'Não informado', ala: row[10] || 'Sem Ala', fotoUrl: row[12] || '', renovado: row[13] || 'Não'
@@ -278,14 +278,70 @@ app.get('/dados-relatorio', async (req, res) => {
       linhasLimites.slice(1).forEach(row => { if (row[0]) limitesAlas[row[0].trim()] = parseInt(row[1] || '0', 10); });
     }
 
-    const dadosPresencas = linhasGeral.length > 1 ? linhasGeral.slice(1).map(row => ({
-      data: row[0] || '', presentes: parseInt(row[1] || '0', 10), ausentes: parseInt(row[2] || '0', 10)
-    })) : [];
+    // --- Monta os gráficos de frequência considerando SÓ quem está com renovado = "Sim" ---
+    // A aba "Geral" e "Alas" guardam totais já somados na hora do ensaio (sem distinguir
+    // renovado ou não). Pra filtrar de verdade, recalculamos a partir da lista nominal de
+    // presentes de cada ensaio, cruzando com quem hoje está marcado como renovado.
+    const idArquivoPresencas = process.env.PRESENCAS_SPREADSHEET_ID;
 
-    // AGORA LÊ A COLUNA DE AUSENTES DA ALA (row[3])
-    const historicoAlas = linhasAlas.length > 1 ? linhasAlas.slice(1).map(row => ({
-      data: row[0] || '', ala: row[1] || '', presentes: parseInt(row[2] || '0', 10), ausentes: parseInt(row[3] || '0', 10)
-    })) : [];
+    const renovadosPorId = new Map();
+    const totalRenovadosPorAla = {};
+    linhasInscritos.slice(1).forEach(row => {
+      if ((row[13] || '') === 'Sim') {
+        const ala = row[10] || 'Sem Ala';
+        renovadosPorId.set(row[0], ala);
+        totalRenovadosPorAla[ala] = (totalRenovadosPorAla[ala] || 0) + 1;
+      }
+    });
+
+    const planilhaPresencasInfo = await sheets.spreadsheets.get({ spreadsheetId: idArquivoPresencas });
+    const abasDeEnsaio = (planilhaPresencasInfo.data.sheets || [])
+      .map(aba => aba.properties.title)
+      .filter(titulo => titulo !== 'Geral' && titulo !== 'Alas');
+
+    let dadosPresencas = [];
+    let historicoAlas = [];
+
+    if (abasDeEnsaio.length > 0 && renovadosPorId.size > 0) {
+      const respostaLote = await sheets.spreadsheets.values.batchGet({
+        spreadsheetId: idArquivoPresencas,
+        ranges: abasDeEnsaio.map(titulo => `${titulo}!A2:A`),
+      });
+
+      const totalRenovados = renovadosPorId.size;
+
+      dadosPresencas = abasDeEnsaio.map((titulo, indice) => {
+        const idsPresentes = (respostaLote.data.valueRanges?.[indice]?.values || []).map(linha => linha[0]);
+        const presentesPorAla = {};
+        let presentesRenovados = 0;
+
+        idsPresentes.forEach(id => {
+          if (renovadosPorId.has(id)) {
+            presentesRenovados += 1;
+            const ala = renovadosPorId.get(id);
+            presentesPorAla[ala] = (presentesPorAla[ala] || 0) + 1;
+          }
+        });
+
+        Object.keys(totalRenovadosPorAla).forEach(ala => {
+          historicoAlas.push({
+            data: titulo.replaceAll('-', '/'),
+            ala,
+            presentes: presentesPorAla[ala] || 0,
+            ausentes: totalRenovadosPorAla[ala] - (presentesPorAla[ala] || 0),
+          });
+        });
+
+        return {
+          data: titulo.replaceAll('-', '/'),
+          presentes: presentesRenovados,
+          ausentes: totalRenovados - presentesRenovados,
+        };
+      });
+
+      dadosPresencas.sort((a, b) => converterDataBR(a.data) - converterDataBR(b.data));
+      historicoAlas.sort((a, b) => converterDataBR(a.data) - converterDataBR(b.data));
+    }
 
     res.json({ componentes, limitesAlas, dadosPresencas, historicoAlas });
   } catch (error) {

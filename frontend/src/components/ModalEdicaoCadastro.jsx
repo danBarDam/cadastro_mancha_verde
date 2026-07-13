@@ -66,17 +66,15 @@ function ModalEdicaoCadastro({ componente, aoFechar, aoSalvar }) {
   };
 
   const handleCpfEdicaoChange = (e) => {
-    let value = e.target.value.replace(/\D/g, '');
-    if (value.length <= 11) {
-      value = value.replace(/(\d{3})(\d)/, '$1.$2');
-      value = value.replace(/(\d{3})(\d)/, '$1.$2');
-      value = value.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
-      handleCampoEdicao('cpf', value);
-    }
+    let value = e.target.value.replace(/\D/g, '').slice(0, 11);
+    value = value.replace(/(\d{3})(\d)/, '$1.$2');
+    value = value.replace(/(\d{3})(\d)/, '$1.$2');
+    value = value.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    handleCampoEdicao('cpf', value);
   };
 
   const handleCepEdicaoChange = async (e) => {
-    const value = e.target.value.replace(/\D/g, '');
+    const value = e.target.value.replace(/\D/g, '').slice(0, 8);
     handleCampoEdicao('cep', value);
 
     if (value.length === 8) {
@@ -218,7 +216,6 @@ function ModalEdicaoCadastro({ componente, aoFechar, aoSalvar }) {
               type="text"
               value={formEdicao.cep || ''}
               onChange={handleCepEdicaoChange}
-              maxLength="8"
               style={inputEdicaoStyle}
             />
             {carregandoCepEdicao && <span style={{ fontSize: '12px', color: '#64748b' }}>Buscando...</span>}

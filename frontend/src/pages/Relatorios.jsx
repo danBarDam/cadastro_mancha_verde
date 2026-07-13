@@ -129,7 +129,7 @@ function Relatorios() {
       return match && match[1] ? `https://drive.google.com/thumbnail?id=${match[1]}&sz=w200` : url;
     };
 
-    let linhasTabela = componentesFiltrados.map((c, i) => `
+    let linhasTabela = [...componentesFiltrados].sort((a, b) => a.nome.localeCompare(b.nome)).map((c, i) => `
       <tr>
         <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center; vertical-align: middle; color: #000000;">${i + 1}</td>
         <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center; vertical-align: middle;">
@@ -184,7 +184,7 @@ function Relatorios() {
 
   const gerarPdfAssinatura = () => {
     const janelaImpressao = window.open('', '_blank');
-    let lines = componentesFiltrados.map((c, i) => `
+    let lines = [...componentesFiltrados].sort((a, b) => a.nome.localeCompare(b.nome)).map((c, i) => `
       <tr style="height: 45px;">
         <td style="padding: 5px; border-bottom: 1px solid #999; text-align: center; color: #000000;">${i + 1}</td>
         <td style="padding: 5px; border-bottom: 1px solid #999; text-transform: uppercase; font-size: 12px; color: #000000;"><b>${c.nome}</b><br><span style="color:#555; font-size:10px;">CPF: ${c.cpf} | Ala: ${c.ala}</span></td>

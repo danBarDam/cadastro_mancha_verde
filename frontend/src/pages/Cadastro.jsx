@@ -62,17 +62,15 @@ function Cadastro() {
   const handleNomeChange = (e) => setNome(e.target.value.toUpperCase());
 
   const handleCpfChange = (e) => {
-    let value = e.target.value.replace(/\D/g, '');
-    if (value.length <= 11) {
-      value = value.replace(/(\d{3})(\d)/, '$1.$2');
-      value = value.replace(/(\d{3})(\d)/, '$1.$2');
-      value = value.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
-      setCpf(value);
-    }
+    let value = e.target.value.replace(/\D/g, '').slice(0, 11);
+    value = value.replace(/(\d{3})(\d)/, '$1.$2');
+    value = value.replace(/(\d{3})(\d)/, '$1.$2');
+    value = value.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    setCpf(value);
   };
 
   const handleCepChange = async (e) => {
-    const value = e.target.value.replace(/\D/g, '');
+    const value = e.target.value.replace(/\D/g, '').slice(0, 8);
     setCep(value);
 
     if (value.length === 8) {
@@ -259,7 +257,7 @@ function Cadastro() {
             className="form-input"
             placeholder="000.000.000-00"
             value={cpf}
-            onChange={(e) => setCpf(e.target.value)}
+            onChange={handleCpfChange}
             style={{ 
                 width: '100%', 
                 padding: '12px', 
@@ -298,7 +296,7 @@ function Cadastro() {
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">CEP:</label>
-            <input type="text" className="form-input" value={cep} onChange={handleCepChange} maxLength="8" required />
+            <input type="text" className="form-input" value={cep} onChange={handleCepChange} required />
             {carregandoCep && <span className="erro-texto">Buscando...</span>}
           </div>
           <div className="form-group flex-2">

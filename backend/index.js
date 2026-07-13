@@ -137,6 +137,26 @@ app.post('/cadastro', upload.single('foto'), async (req, res) => {
       return res.status(400).json({ error: 'Dados essenciais incompletos.' });
     }
 
+    // Verifica se o CPF ou o telefone já estão cadastrados antes de gravar
+    const responseExistentes = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.SPREADSHEET_ID,
+      range: 'Inscricoes!A:N',
+    });
+    const linhasExistentes = (responseExistentes.data.values || []).slice(1);
+
+    const cpfSemPontos = cpf.replace(/\D/g, '');
+    const telefoneSemPontos = (telefone || '').replace(/\D/g, '');
+
+    const cpfDuplicado = linhasExistentes.some(row => row[3] && row[3].replace(/\D/g, '') === cpfSemPontos);
+    const telefoneDuplicado = telefoneSemPontos && linhasExistentes.some(row => row[4] && row[4].replace(/\D/g, '') === telefoneSemPontos);
+
+    if (cpfDuplicado) {
+      return res.status(409).json({ error: 'Já existe um cadastro com este CPF.' });
+    }
+    if (telefoneDuplicado) {
+      return res.status(409).json({ error: 'Já existe um cadastro com este número de WhatsApp.' });
+    }
+
     let fotoUrl = '';
 
     // 1. Se uma foto foi enviada, converte em Base64 e sobe pro Microserviço no Apps Script

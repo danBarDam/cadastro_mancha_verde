@@ -148,7 +148,7 @@ function Cadastro() {
 
     } catch (error) {
       console.error('Erro:', error);
-      setStatus('Erro ao salvar. Verifique o console.');
+      setStatus(error.response?.data?.error || 'Erro ao salvar. Verifique o console.');
     }
   };
 

@@ -3,11 +3,12 @@ import api from '../utils/api';
 
 function Relatorios() {
   const [componentes, setComponentes] = useState([]);
+  const [todasAlas, setTodasAlas] = useState([]);
   const [limites, setLimites] = useState({});
   const [presencas, setPresencas] = useState([]);
   const [historicoAlas, setHistoricoAlas] = useState([]);
   const [carregando, setCarregando] = useState(true);
-  
+
   const [alaFiltro, setAlaFiltro] = useState('TODAS'); // Filtro da Tabela e PDFs
   const [alaSelecionadaGrafico, setAlaSelecionadaGrafico] = useState('TODAS'); // Filtro do Gráfico Detalhado
   const [alaFiltroEvolucao, setAlaFiltroEvolucao] = useState('TODAS'); // Filtro do Novo Gráfico de Inscrições
@@ -18,10 +19,16 @@ function Relatorios() {
 
   const puxarDados = async () => {
     try {
-      const resposta = await api.get('/dados-relatorio');
+      const [resposta, respostaAlas] = await Promise.all([
+        api.get('/dados-relatorio'),
+        api.get('/alas'),
+      ]);
       // Relatórios e PDFs consideram apenas os cadastros marcados como renovados
       const componentesRenovados = (resposta.data.componentes || []).filter((c) => c.renovado === 'Sim');
       setComponentes(componentesRenovados);
+      // Lista oficial de alas (independe de quantos já renovaram, senão uma ala sem
+      // nenhum renovado ainda some dos filtros e do painel de ocupação)
+      setTodasAlas(respostaAlas.data.alas || []);
       setLimites(resposta.data.limitesAlas || {});
       setPresencas(resposta.data.dadosPresencas || []);
       setHistoricoAlas(resposta.data.historicoAlas || []);
@@ -45,7 +52,8 @@ function Relatorios() {
     return acc;
   }, {});
 
-  const listaAlas = Object.keys(contagemPorAla).sort();
+  // Une a lista oficial de alas com qualquer ala presente nos dados mas ausente da aba "Alas"
+  const listaAlas = Array.from(new Set([...todasAlas, ...Object.keys(contagemPorAla)])).sort();
 
   const componentesFiltrados = componentes.filter(comp => 
     alaFiltro === 'TODAS' || comp.ala === alaFiltro

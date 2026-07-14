@@ -363,7 +363,10 @@ function Relatorios() {
         <div style={{ flex: 1, minWidth: '280px', backgroundColor: 'white', padding: '25px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px rgba(0,0,0,0.02)', boxSizing: 'border-box' }}>
           <h4 style={{ margin: '0 0 25px 0', color: '#000000', fontWeight: 'bold' }}>Ocupação de Vagas (Alas)</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-            {listaAlas.filter(ala => (contagemPorAla[ala] || 0) > 0).map(ala => {
+            {listaAlas
+              .filter(ala => (contagemPorAla[ala] || 0) > 0)
+              .sort((a, b) => (contagemPorAla[b] || 0) - (contagemPorAla[a] || 0) || a.localeCompare(b))
+              .map(ala => {
               const qtdAtual = contagemPorAla[ala] || 0;
               const limiteDefinido = limites[ala] || qtdAtual;
               const pctOcupacao = limiteDefinido > 0 ? ((qtdAtual / limiteDefinido) * 100).toFixed(1) : 0;

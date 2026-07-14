@@ -8,23 +8,39 @@ function Login() {
   const [senha, setSenha] = useState('');
   const [erro, setErro] = useState('');
   const [carregando, setCarregando] = useState(false);
+  const [avisoDemora, setAvisoDemora] = useState(false);
   const navigate = useNavigate();
 
   const lidarComLogin = async (e) => {
     e.preventDefault();
     setErro('');
     setCarregando(true);
+    setAvisoDemora(false);
 
-    try {
-      const resposta = await api.post('/login', { usuario, senha });
-      salvarSessao(resposta.data.token, resposta.data.usuario);
-      navigate('/');
-    } catch (err) {
-      console.error(err);
-      setErro(err.response?.data?.error || 'Erro ao conectar com o servidor.');
-    } finally {
-      setCarregando(false);
-    }
+    // O backend gratuito "dorme" após um tempo sem uso e pode levar até ~1min
+    // pra acordar. Avisa o usuário depois de alguns segundos pra não parecer travado.
+    const avisoTimer = setTimeout(() => setAvisoDemora(true), 4000);
+
+    // Se o servidor ainda estiver acordando, a primeira tentativa pode falhar
+    // por timeout/conexão recusada (sem resposta) em vez de credenciais inválidas.
+    const tentarLogin = async (tentativa = 1) => {
+      try {
+        const resposta = await api.post('/login', { usuario, senha });
+        salvarSessao(resposta.data.token, resposta.data.usuario);
+        navigate('/');
+      } catch (err) {
+        if (!err.response && tentativa < 3) {
+          return tentarLogin(tentativa + 1);
+        }
+        console.error(err);
+        setErro(err.response?.data?.error || 'Erro ao conectar com o servidor. Tente novamente em instantes.');
+      }
+    };
+
+    await tentarLogin();
+    clearTimeout(avisoTimer);
+    setAvisoDemora(false);
+    setCarregando(false);
   };
 
   return (
@@ -66,6 +82,12 @@ function Login() {
             required
           />
         </label>
+
+        {avisoDemora && carregando && (
+          <div style={{ color: '#64748b', marginBottom: '15px', textAlign: 'center', fontSize: '13px' }}>
+            O servidor pode estar iniciando, isso pode levar até 1 minuto na primeira tentativa...
+          </div>
+        )}
 
         {erro && <div style={{ color: '#ef4444', fontWeight: 'bold', marginBottom: '15px', textAlign: 'center', fontSize: '14px' }}>{erro}</div>}
 

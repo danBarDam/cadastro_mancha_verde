@@ -370,7 +370,7 @@ function Relatorios() {
               const qtdAtual = contagemPorAla[ala] || 0;
               const limiteDefinido = limites[ala] || qtdAtual;
               const pctOcupacao = limiteDefinido > 0 ? ((qtdAtual / limiteDefinido) * 100).toFixed(1) : 0;
-              const corBarra = pctOcupacao >= 100 ? '#ef4444' : pctOcupacao >= 85 ? '#eab308' : '#10b981';
+              const corBarra = pctOcupacao >= 100 ? '#10b981' : pctOcupacao >= 85 ? '#eab308' : '#ef4444';
 
               return (
                 <div key={ala} style={{ fontSize: '13px' }}>

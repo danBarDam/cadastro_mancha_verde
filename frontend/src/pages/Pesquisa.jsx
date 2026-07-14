@@ -180,7 +180,7 @@ function Pesquisa() {
                 display: 'inline-block',
                 marginBottom: '5px'
               }}>
-                ALA: {componente.ala}
+                {componente.ala}
               </span>
               <br />
               <span style={{

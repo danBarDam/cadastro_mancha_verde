@@ -95,9 +95,17 @@ app.get('/proximo-id', async (req, res) => {
     });
 
     const linhas = response.data.values || [];
-    // O número da próxima inscrição é a quantidade de linhas atuais (descontando o cabeçalho) + 1
-    let proximoNumero = linhas.length === 0 ? 1 : linhas.length;
-    
+
+    // Calcula com base no maior ID numérico já usado, e não na quantidade de
+    // linhas: se um cadastro for excluído ou um ID for digitado manualmente
+    // fora de ordem, contar linhas pode gerar um número que já existe.
+    const idsExistentes = linhas.slice(1)
+      .map(row => parseInt(row[0], 10))
+      .filter(numero => !isNaN(numero));
+
+    const maiorId = idsExistentes.length > 0 ? Math.max(...idsExistentes) : 0;
+    const proximoNumero = maiorId + 1;
+
     // Transforma em uma string de 8 dígitos (ex: 1 vira "00000001")
     const idFormatado = String(proximoNumero).padStart(8, '0');
     

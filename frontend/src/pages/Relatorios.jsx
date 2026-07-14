@@ -363,17 +363,17 @@ function Relatorios() {
         <div style={{ flex: 1, minWidth: '280px', backgroundColor: 'white', padding: '25px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px rgba(0,0,0,0.02)', boxSizing: 'border-box' }}>
           <h4 style={{ margin: '0 0 25px 0', color: '#000000', fontWeight: 'bold' }}>Ocupação de Vagas (Alas)</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-            {listaAlas.map(ala => {
+            {listaAlas.filter(ala => (contagemPorAla[ala] || 0) > 0).map(ala => {
               const qtdAtual = contagemPorAla[ala] || 0;
-              const limiteDefinido = limites[ala] || qtdAtual; 
+              const limiteDefinido = limites[ala] || qtdAtual;
               const pctOcupacao = limiteDefinido > 0 ? ((qtdAtual / limiteDefinido) * 100).toFixed(1) : 0;
               const corBarra = pctOcupacao >= 100 ? '#ef4444' : pctOcupacao >= 85 ? '#eab308' : '#10b981';
 
               return (
                 <div key={ala} style={{ fontSize: '13px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                    <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#000000' }}>{ala}</span>
-                    <span style={{ color: '#000000', fontWeight: 'bold' }}>{qtdAtual} / {limites[ala] ? limites[ala] : '∞'} ({pctOcupacao}%)</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', marginBottom: '6px' }}>
+                    <span style={{ fontWeight: 'bold', textTransform: 'uppercase', color: '#000000', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ala}</span>
+                    <span style={{ color: '#000000', fontWeight: 'bold', whiteSpace: 'nowrap', flexShrink: 0 }}>{qtdAtual} / {limites[ala] ? limites[ala] : '∞'} ({pctOcupacao}%)</span>
                   </div>
                   <div style={{ width: '100%', backgroundColor: '#f1f5f9', height: '12px', borderRadius: '6px', overflow: 'hidden' }}>
                     <div style={{ width: `${Math.min(pctOcupacao, 100)}%`, backgroundColor: corBarra, height: '100%' }}></div>

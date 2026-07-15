@@ -52,6 +52,7 @@ function ModalEdicaoCadastro({ componente, aoFechar, aoSalvar }) {
       cep: componente.cep || '',
       rua: componente.rua || '',
       bairro: componente.bairro || '',
+      cidade: componente.cidade || '',
       numero: componente.numero || '',
       complemento: componente.complemento || '',
       ala: componente.ala || '',
@@ -89,6 +90,7 @@ function ModalEdicaoCadastro({ componente, aoFechar, aoSalvar }) {
         } else {
           handleCampoEdicao('rua', response.data.logradouro.toUpperCase());
           handleCampoEdicao('bairro', response.data.bairro.toUpperCase());
+          handleCampoEdicao('cidade', response.data.localidade.toUpperCase());
         }
       } catch (error) {
         console.error('Erro no CEP:', error);
@@ -127,6 +129,7 @@ function ModalEdicaoCadastro({ componente, aoFechar, aoSalvar }) {
       formData.append('cep', formEdicao.cep);
       formData.append('rua', formEdicao.rua);
       formData.append('bairro', formEdicao.bairro);
+      formData.append('cidade', formEdicao.cidade);
       formData.append('numero', formEdicao.numero);
       formData.append('complemento', formEdicao.complemento);
       formData.append('ala', formEdicao.ala);
@@ -240,7 +243,7 @@ function ModalEdicaoCadastro({ componente, aoFechar, aoSalvar }) {
         </div>
 
         <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
-          <label style={{ ...labelEdicaoStyle, flex: '1 1 150px' }}>
+          <label style={{ ...labelEdicaoStyle, flex: '2 1 200px' }}>
             Bairro:
             <input
               type="text"
@@ -250,6 +253,18 @@ function ModalEdicaoCadastro({ componente, aoFechar, aoSalvar }) {
             />
           </label>
 
+          <label style={{ ...labelEdicaoStyle, flex: '1 1 150px' }}>
+            Cidade:
+            <input
+              type="text"
+              value={formEdicao.cidade || ''}
+              onChange={(e) => handleCampoEdicao('cidade', e.target.value.toUpperCase())}
+              style={inputEdicaoStyle}
+            />
+          </label>
+        </div>
+
+        <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
           <label style={{ ...labelEdicaoStyle, flex: '1 1 100px' }}>
             Número:
             <input

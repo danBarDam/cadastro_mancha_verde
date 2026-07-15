@@ -15,6 +15,7 @@ function Cadastro() {
   const [cep, setCep] = useState('');
   const [rua, setRua] = useState('');
   const [bairro, setBairro] = useState('');
+  const [cidade, setCidade] = useState('');
   const [numero, setNumero] = useState('');
   const [complemento, setComplemento] = useState('');
   const [ala, setAla] = useState('');
@@ -84,6 +85,7 @@ function Cadastro() {
         } else {
           setRua(response.data.logradouro.toUpperCase());
           setBairro(response.data.bairro.toUpperCase());
+          setCidade(response.data.localidade.toUpperCase());
         }
       } catch (error) {
         console.error('Erro no CEP:', error);
@@ -119,6 +121,7 @@ function Cadastro() {
       formData.append('cep', cep);
       formData.append('rua', rua);
       formData.append('bairro', bairro);
+      formData.append('cidade', cidade);
       formData.append('numero', numero);
       formData.append('complemento', complemento);
       formData.append('ala', ala);
@@ -139,7 +142,7 @@ function Cadastro() {
       setStatusCarteirinha('');
 
       // Limpa os campos
-      setNome(''); setCpf(''); setCep(''); setRua(''); setBairro('');
+      setNome(''); setCpf(''); setCep(''); setRua(''); setBairro(''); setCidade('');
       setNumero(''); setComplemento(''); setAla(''); setFotoSrc(null);
 
       // Se for cadastro novo, atualiza o ID automático para o próximo
@@ -310,10 +313,17 @@ function Cadastro() {
         </div>
 
         <div className="form-row">
-          <div className="form-group">
+          <div className="form-group flex-2">
             <label className="form-label">Bairro:</label>
             <input type="text" className="form-input" value={bairro} onChange={(e) => setBairro(e.target.value.toUpperCase())} required />
           </div>
+          <div className="form-group">
+            <label className="form-label">Cidade:</label>
+            <input type="text" className="form-input" value={cidade} onChange={(e) => setCidade(e.target.value.toUpperCase())} required />
+          </div>
+        </div>
+
+        <div className="form-row">
           <div className="form-group">
             <label className="form-label">Número:</label>
             <input type="text" className="form-input" value={numero} onChange={(e) => setNumero(e.target.value)} required />

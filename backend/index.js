@@ -138,7 +138,7 @@ app.get('/alas', async (req, res) => {
 // --- ROTA 3: Receber e salvar o Cadastro Completo ---
 app.post('/cadastro', upload.single('foto'), async (req, res) => {
   try {
-    const { id, tipoCadastro, nome, cpf, telefone, cep, rua, bairro, numero, complemento, ala, data } = req.body;
+    const { id, tipoCadastro, nome, cpf, telefone, cep, rua, bairro, cidade, numero, complemento, ala, data } = req.body;
     const foto = req.file;
 
     if (!nome || !cpf) {
@@ -211,14 +211,15 @@ app.post('/cadastro', upload.single('foto'), async (req, res) => {
 
     // 2. Salvar todos os dados na Planilha (mantido via Service Account)
     // A coluna N (renovado) já entra como "Sim" ao salvar, igual ao efeito do
-    // botão "Marcar Renovação" da tela de Pesquisa.
+    // botão "Marcar Renovação" da tela de Pesquisa. A coluna O guarda a cidade
+    // (preenchida via ViaCEP na tela de cadastro).
     const dadosParaSalvar = [
-      id, tipoCadastro, nome, cpf, telefone, cep, rua, bairro, numero, complemento, ala, data, fotoUrl, 'Sim'
+      id, tipoCadastro, nome, cpf, telefone, cep, rua, bairro, numero, complemento, ala, data, fotoUrl, 'Sim', cidade || ''
     ];
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.SPREADSHEET_ID,
-      range: 'Inscricoes!A:N',
+      range: 'Inscricoes!A:O',
       valueInputOption: 'USER_ENTERED',
       requestBody: {
         values: [dadosParaSalvar],
@@ -244,7 +245,7 @@ app.get('/buscar', async (req, res) => {
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.SPREADSHEET_ID,
-      range: 'Inscricoes!A:N', // Coluna N = renovado (Sim/Não)
+      range: 'Inscricoes!A:O', // Coluna N = renovado (Sim/Não), Coluna O = cidade
     });
 
     const rows = response.data.values;
@@ -290,6 +291,7 @@ app.get('/buscar', async (req, res) => {
       data: row[11],
       fotoUrl: row[12],
       renovado: row[13] || 'Não',
+      cidade: row[14] || '',
     }));
 
     res.json(dadosFormatados);
@@ -638,7 +640,7 @@ app.post('/salvar-carteirinha', upload.single('imagem'), async (req, res) => {
 app.put('/atualizar-cadastro/:id', upload.single('foto'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { tipoCadastro, nome, cpf, telefone, cep, rua, bairro, numero, complemento, ala, data } = req.body;
+    const { tipoCadastro, nome, cpf, telefone, cep, rua, bairro, cidade, numero, complemento, ala, data } = req.body;
     const novaFoto = req.file;
 
     if (!nome || !cpf) {
@@ -648,7 +650,7 @@ app.put('/atualizar-cadastro/:id', upload.single('foto'), async (req, res) => {
     // 1. Localiza a linha do cadastro pelo ID (coluna A)
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.SPREADSHEET_ID,
-      range: 'Inscricoes!A:N',
+      range: 'Inscricoes!A:O',
     });
 
     const linhas = response.data.values || [];
@@ -685,10 +687,10 @@ app.put('/atualizar-cadastro/:id', upload.single('foto'), async (req, res) => {
     const linhaPlanilha = indiceLinha + 1; // Sheets é 1-indexado
     await sheets.spreadsheets.values.update({
       spreadsheetId: process.env.SPREADSHEET_ID,
-      range: `Inscricoes!A${linhaPlanilha}:N${linhaPlanilha}`,
+      range: `Inscricoes!A${linhaPlanilha}:O${linhaPlanilha}`,
       valueInputOption: 'USER_ENTERED',
       requestBody: {
-        values: [[id, tipoCadastro, nome, cpf, telefone, cep, rua, bairro, numero, complemento, ala, data, fotoUrl, renovado]],
+        values: [[id, tipoCadastro, nome, cpf, telefone, cep, rua, bairro, numero, complemento, ala, data, fotoUrl, renovado, cidade || '']],
       },
     });
 

@@ -147,7 +147,6 @@ function Relatorios() {
         </td>
         <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center; vertical-align: middle; color: #000000;">#${c.id}</td>
         <td style="padding: 8px; border-bottom: 1px solid #ddd; text-transform: uppercase; vertical-align: middle; font-weight: bold; color: #000000;">${c.nome}</td>
-        <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center; vertical-align: middle; color: #000000;">${c.cpf}</td>
         <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center; vertical-align: middle; color: #000000;">${c.ala}</td>
         <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center; vertical-align: middle; color: #000000;">${c.telefone}</td>
       </tr>
@@ -174,13 +173,12 @@ function Relatorios() {
           <table>
             <thead>
               <tr>
-                <th style="width: 5%; text-align: center;">Nº</th>
-                <th style="width: 8%; text-align: center;">Foto</th>
-                <th style="width: 8%; text-align: center;">Insc.</th>
-                <th style="width: 33%;">Nome Completo</th>
-                <th style="width: 15%; text-align: center;">CPF</th>
-                <th style="width: 15%; text-align: center;">Ala</th>
-                <th style="width: 16%; text-align: center;">WhatsApp</th>
+                <th style="width: 6%; text-align: center;">Nº</th>
+                <th style="width: 10%; text-align: center;">Foto</th>
+                <th style="width: 10%; text-align: center;">Insc.</th>
+                <th style="width: 40%;">Nome Completo</th>
+                <th style="width: 17%; text-align: center;">Ala</th>
+                <th style="width: 17%; text-align: center;">WhatsApp</th>
               </tr>
             </thead>
             <tbody>${linhasTabela}</tbody>

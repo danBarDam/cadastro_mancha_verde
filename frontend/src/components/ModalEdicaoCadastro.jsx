@@ -22,6 +22,7 @@ function ModalEdicaoCadastro({ componente, aoFechar, aoSalvar }) {
   const [formEdicao, setFormEdicao] = useState({});
   const [alasLista, setAlasLista] = useState([]);
   const [carregandoCepEdicao, setCarregandoCepEdicao] = useState(false);
+  const [erroCepEdicao, setErroCepEdicao] = useState('');
   const [novaFotoEdicao, setNovaFotoEdicao] = useState(null);
   const [cameraEdicaoAtiva, setCameraEdicaoAtiva] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -59,6 +60,7 @@ function ModalEdicaoCadastro({ componente, aoFechar, aoSalvar }) {
     setNovaFotoEdicao(null);
     setCameraEdicaoAtiva(false);
     setErroEdicao('');
+    setErroCepEdicao('');
   }, [componente]);
 
   const handleCampoEdicao = (campo, valor) => {
@@ -76,17 +78,21 @@ function ModalEdicaoCadastro({ componente, aoFechar, aoSalvar }) {
   const handleCepEdicaoChange = async (e) => {
     const value = e.target.value.replace(/\D/g, '').slice(0, 8);
     handleCampoEdicao('cep', value);
+    setErroCepEdicao('');
 
     if (value.length === 8) {
       setCarregandoCepEdicao(true);
       try {
         const response = await axios.get(`https://viacep.com.br/ws/${value}/json/`);
-        if (!response.data.erro) {
+        if (response.data.erro) {
+          setErroCepEdicao('CEP não encontrado. Preencha o endereço manualmente.');
+        } else {
           handleCampoEdicao('rua', response.data.logradouro.toUpperCase());
           handleCampoEdicao('bairro', response.data.bairro.toUpperCase());
         }
       } catch (error) {
         console.error('Erro no CEP:', error);
+        setErroCepEdicao('Não foi possível consultar o CEP. Preencha o endereço manualmente.');
       } finally {
         setCarregandoCepEdicao(false);
       }
@@ -219,6 +225,7 @@ function ModalEdicaoCadastro({ componente, aoFechar, aoSalvar }) {
               style={inputEdicaoStyle}
             />
             {carregandoCepEdicao && <span style={{ fontSize: '12px', color: '#64748b' }}>Buscando...</span>}
+            {!carregandoCepEdicao && erroCepEdicao && <span style={{ fontSize: '12px', color: '#ef4444' }}>{erroCepEdicao}</span>}
           </label>
 
           <label style={{ ...labelEdicaoStyle, flex: '2 1 250px' }}>

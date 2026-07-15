@@ -26,6 +26,7 @@ function Cadastro() {
   const [alasLista, setAlasLista] = useState([]);
   const [status, setStatus] = useState('');
   const [carregandoCep, setCarregandoCep] = useState(false);
+  const [erroCep, setErroCep] = useState('');
 
   const [ultimoCadastro, setUltimoCadastro] = useState(null);
   const [gerandoCarteirinha, setGerandoCarteirinha] = useState(false);
@@ -72,17 +73,21 @@ function Cadastro() {
   const handleCepChange = async (e) => {
     const value = e.target.value.replace(/\D/g, '').slice(0, 8);
     setCep(value);
+    setErroCep('');
 
     if (value.length === 8) {
       setCarregandoCep(true);
       try {
         const response = await axios.get(`https://viacep.com.br/ws/${value}/json/`);
-        if (!response.data.erro) {
+        if (response.data.erro) {
+          setErroCep('CEP não encontrado. Preencha o endereço manualmente.');
+        } else {
           setRua(response.data.logradouro.toUpperCase());
           setBairro(response.data.bairro.toUpperCase());
         }
       } catch (error) {
         console.error('Erro no CEP:', error);
+        setErroCep('Não foi possível consultar o CEP. Preencha o endereço manualmente.');
       } finally {
         setCarregandoCep(false);
       }
@@ -296,6 +301,7 @@ function Cadastro() {
             <label className="form-label">CEP:</label>
             <input type="text" className="form-input" value={cep} onChange={handleCepChange} required />
             {carregandoCep && <span className="erro-texto">Buscando...</span>}
+            {!carregandoCep && erroCep && <span className="erro-texto">{erroCep}</span>}
           </div>
           <div className="form-group flex-2">
             <label className="form-label">Rua / Logradouro:</label>

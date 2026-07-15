@@ -12,6 +12,7 @@ function Relatorios() {
   const [alaFiltro, setAlaFiltro] = useState('TODAS'); // Filtro da Tabela e PDFs
   const [alaSelecionadaGrafico, setAlaSelecionadaGrafico] = useState('TODAS'); // Filtro do Gráfico Detalhado
   const [alaFiltroEvolucao, setAlaFiltroEvolucao] = useState('TODAS'); // Filtro do Novo Gráfico de Inscrições
+  const [alaFiltroNovosRenovacoes, setAlaFiltroNovosRenovacoes] = useState('TODAS'); // Filtro do Gráfico Novos x Renovações
 
   useEffect(() => {
     puxarDados();
@@ -117,8 +118,12 @@ function Relatorios() {
   const maxInscricoesData = Math.max(...dadosEvolucaoInscricoes.map(d => d.quantidade), 1);
 
   // --- PROCESSAMENTO DO GRÁFICO 4: NOVOS CADASTROS x RENOVAÇÕES (entre os renovados) ---
-  const totalCadastrosNovos = componentesEvolucao.filter(c => c.tipoCadastro === 'Novo').length;
-  const totalRenovacoes = componentesEvolucao.filter(c => c.tipoCadastro === 'Renovação').length;
+  const componentesNovosRenovacoes = alaFiltroNovosRenovacoes === 'TODAS'
+    ? componentes
+    : componentes.filter(c => c.ala === alaFiltroNovosRenovacoes);
+
+  const totalCadastrosNovos = componentesNovosRenovacoes.filter(c => c.tipoCadastro === 'Novo').length;
+  const totalRenovacoes = componentesNovosRenovacoes.filter(c => c.tipoCadastro === 'Renovação').length;
   const totalNovosOuRenovacoes = totalCadastrosNovos + totalRenovacoes;
 
 
@@ -475,10 +480,25 @@ function Relatorios() {
 
         {/* GRÁFICO: NOVOS CADASTROS x RENOVAÇÕES */}
         <div style={{ flex: 1, minWidth: '260px', backgroundColor: 'white', padding: '25px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px rgba(0,0,0,0.02)', boxSizing: 'border-box' }}>
-          <h4 style={{ margin: '0 0 5px 0', color: '#000000', fontWeight: 'bold' }}>Novos Cadastros x Renovações</h4>
-          <p style={{ margin: '4px 0 25px 0', fontSize: '13px', color: '#64748b', fontWeight: '500' }}>
-            Entre os componentes marcados como renovados
-          </p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '15px', marginBottom: '25px' }}>
+            <div>
+              <h4 style={{ margin: 0, color: '#000000', fontWeight: 'bold' }}>Novos Cadastros x Renovações</h4>
+              <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b', fontWeight: '500' }}>
+                Entre os componentes marcados como renovados
+              </p>
+            </div>
+
+            <select
+              value={alaFiltroNovosRenovacoes}
+              onChange={(e) => setAlaFiltroNovosRenovacoes(e.target.value)}
+              style={{ padding: '10px 15px', borderRadius: '6px', border: '2px solid #2563eb', backgroundColor: '#FFFFFF', color: '#000000', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}
+            >
+              <option value="TODAS">TODAS AS ALAS (GERAL)</option>
+              {listaAlas.map(ala => (
+                <option key={ala} value={ala}>{ala.toUpperCase()}</option>
+              ))}
+            </select>
+          </div>
 
           {totalNovosOuRenovacoes === 0 ? (
             <div style={{ textAlign: 'center', color: '#64748b', fontWeight: 'bold', paddingTop: '30px' }}>

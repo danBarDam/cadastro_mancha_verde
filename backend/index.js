@@ -210,10 +210,10 @@ app.post('/cadastro', upload.single('foto'), async (req, res) => {
     }
 
     // 2. Salvar todos os dados na Planilha (mantido via Service Account)
-    // A coluna N (depois da foto) começa sempre como "Não" - a renovação é
-    // marcada manualmente depois, pela tela de Pesquisa.
+    // A coluna N (renovado) já entra como "Sim" ao salvar, igual ao efeito do
+    // botão "Marcar Renovação" da tela de Pesquisa.
     const dadosParaSalvar = [
-      id, tipoCadastro, nome, cpf, telefone, cep, rua, bairro, numero, complemento, ala, data, fotoUrl, 'Não'
+      id, tipoCadastro, nome, cpf, telefone, cep, rua, bairro, numero, complemento, ala, data, fotoUrl, 'Sim'
     ];
 
     await sheets.spreadsheets.values.append({

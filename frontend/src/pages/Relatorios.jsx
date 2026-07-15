@@ -55,9 +55,9 @@ function Relatorios() {
   // Une a lista oficial de alas com qualquer ala presente nos dados mas ausente da aba "Alas"
   const listaAlas = Array.from(new Set([...todasAlas, ...Object.keys(contagemPorAla)])).sort();
 
-  const componentesFiltrados = componentes.filter(comp => 
-    alaFiltro === 'TODAS' || comp.ala === alaFiltro
-  );
+  const componentesFiltrados = componentes
+    .filter(comp => alaFiltro === 'TODAS' || comp.ala === alaFiltro)
+    .sort((a, b) => a.nome.localeCompare(b.nome));
 
   const maiorFrequencia = Math.max(...presencas.map(p => Math.max(p.presentes, p.ausentes)), 1);
 
@@ -115,6 +115,11 @@ function Relatorios() {
   })).sort((a, b) => parseDataBR(a.data) - parseDataBR(b.data));
 
   const maxInscricoesData = Math.max(...dadosEvolucaoInscricoes.map(d => d.quantidade), 1);
+
+  // --- PROCESSAMENTO DO GRÁFICO 4: NOVOS CADASTROS x RENOVAÇÕES (entre os renovados) ---
+  const totalCadastrosNovos = componentesEvolucao.filter(c => c.tipoCadastro === 'Novo').length;
+  const totalRenovacoes = componentesEvolucao.filter(c => c.tipoCadastro === 'Renovação').length;
+  const totalNovosOuRenovacoes = totalCadastrosNovos + totalRenovacoes;
 
 
   // =========================================================================
@@ -388,10 +393,10 @@ function Relatorios() {
         </div>
       </div>
 
-      {/* ======================= LINHA 3: GRÁFICO DE EVOLUÇÃO DE INSCRIÇÕES EM LINHA ======================= */}
-      <div style={{ display: 'flex', width: '100%', marginBottom: '40px' }}>
-        <div style={{ flex: 1, width: '100%', backgroundColor: 'white', padding: '25px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px rgba(0,0,0,0.02)', boxSizing: 'border-box' }}>
-          
+      {/* ======================= LINHA 3: GRÁFICO DE EVOLUÇÃO DE INSCRIÇÕES + NOVOS x RENOVAÇÕES ======================= */}
+      <div style={{ display: 'flex', gap: '30px', marginBottom: '40px', flexWrap: 'wrap', width: '100%' }}>
+        <div style={{ flex: 2, minWidth: '350px', backgroundColor: 'white', padding: '25px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px rgba(0,0,0,0.02)', boxSizing: 'border-box' }}>
+
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', flexWrap: 'wrap', gap: '15px' }}>
             <div>
               <h4 style={{ margin: 0, color: '#000000', fontWeight: 'bold' }}>Evolução de Cadastros (Frequência Diária)</h4>
@@ -466,6 +471,40 @@ function Relatorios() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* GRÁFICO: NOVOS CADASTROS x RENOVAÇÕES */}
+        <div style={{ flex: 1, minWidth: '260px', backgroundColor: 'white', padding: '25px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px rgba(0,0,0,0.02)', boxSizing: 'border-box' }}>
+          <h4 style={{ margin: '0 0 5px 0', color: '#000000', fontWeight: 'bold' }}>Novos Cadastros x Renovações</h4>
+          <p style={{ margin: '4px 0 25px 0', fontSize: '13px', color: '#64748b', fontWeight: '500' }}>
+            Entre os componentes marcados como renovados
+          </p>
+
+          {totalNovosOuRenovacoes === 0 ? (
+            <div style={{ textAlign: 'center', color: '#64748b', fontWeight: 'bold', paddingTop: '30px' }}>
+              Nenhum dado disponível para este filtro.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {[
+                { label: 'Cadastros Novos', valor: totalCadastrosNovos, cor: '#2563eb' },
+                { label: 'Renovações', valor: totalRenovacoes, cor: '#005c33' },
+              ].map(item => {
+                const pct = ((item.valor / totalNovosOuRenovacoes) * 100).toFixed(1);
+                return (
+                  <div key={item.label} style={{ fontSize: '13px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <span style={{ fontWeight: 'bold', color: '#000000' }}>{item.label}</span>
+                      <span style={{ fontWeight: 'bold', color: '#000000' }}>{item.valor} ({pct}%)</span>
+                    </div>
+                    <div style={{ width: '100%', backgroundColor: '#f1f5f9', height: '14px', borderRadius: '7px', overflow: 'hidden' }}>
+                      <div style={{ width: `${pct}%`, backgroundColor: item.cor, height: '100%' }}></div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 

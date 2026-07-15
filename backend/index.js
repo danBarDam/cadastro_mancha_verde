@@ -318,7 +318,7 @@ app.get('/dados-relatorio', async (req, res) => {
     const linhasLimites = responseLimites.data.values || [];
 
     const componentes = linhasInscritos.length > 1 ? linhasInscritos.slice(1).map(row => ({
-      id: row[0] || '', nome: row[2] || '', cpf: row[3] || '', telefone: row[4] || 'Não informado', ala: row[10] || 'Sem Ala', fotoUrl: row[12] || '', renovado: row[13] || 'Não'
+      id: row[0] || '', tipoCadastro: row[1] || '', nome: row[2] || '', cpf: row[3] || '', telefone: row[4] || 'Não informado', ala: row[10] || 'Sem Ala', data: row[11] || '', fotoUrl: row[12] || '', renovado: row[13] || 'Não'
     })) : [];
 
     const limitesAlas = {};

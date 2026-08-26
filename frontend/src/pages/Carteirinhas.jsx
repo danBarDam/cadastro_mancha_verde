@@ -155,7 +155,7 @@ function Carteirinhas() {
                 <div style={{ fontWeight: 'bold', color: '#1e293b', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {componente.nome}
                 </div>
-                <div style={{ fontSize: '13px', color: '#64748b' }}>ALA: {componente.ala} | #{componente.id}</div>
+                <div style={{ fontSize: '13px', color: '#64748b' }}>{componente.ala} | #{componente.id}</div>
               </div>
               <button
                 onClick={(e) => { e.stopPropagation(); setComponenteEmEdicao(componente); }}

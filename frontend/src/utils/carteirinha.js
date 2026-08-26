@@ -113,7 +113,7 @@ export async function gerarImagemCarteirinha({ id, nome, ala, data, fotoSrc, fot
 
   // Selo da Ala
   y += 25;
-  const textoAla = `ALA: ${ala || 'NÃO INFORMADA'}`;
+  const textoAla = ala || 'NÃO INFORMADA';
   ctx.font = 'bold 18px Arial';
   const larguraTexto = ctx.measureText(textoAla).width;
   const larguraBadge = larguraTexto + 50;

@@ -558,8 +558,8 @@ function Relatorios() {
         <div style={{ overflowX: 'auto', backgroundColor: '#FFFFFF', padding: '10px', borderRadius: '4px', border: '1px solid #cccccc' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', backgroundColor: '#FFFFFF' }}>
             <thead>
-              <tr style={{ borderBottom: '2px solid #000000', textAlign: 'left' }}>
-                <th style={{ padding: '10px 5px', textAlign: 'center' }}><span style={{ color: '#000000' }}>Foto</span></th>
+              <tr style={{ borderBottom: '2px solid #000000', textAlign: 'center' }}>
+                <th style={{ padding: '10px 5px' }}><span style={{ color: '#000000' }}>Foto</span></th>
                 <th style={{ padding: '10px 5px' }}><span style={{ color: '#000000' }}>ID</span></th>
                 <th style={{ padding: '10px 5px' }}><span style={{ color: '#000000' }}>Nome</span></th>
                 <th style={{ padding: '10px 5px' }}><span style={{ color: '#000000' }}>CPF</span></th>

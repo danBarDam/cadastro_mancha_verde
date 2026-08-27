@@ -131,13 +131,15 @@ function Relatorios() {
   // 2. FUNÇÕES DE EXPORTAÇÃO (PDFs)
   // =========================================================================
 
+  // Converte o link de compartilhamento do Drive em um link direto de miniatura (usado no PDF e na pré-visualização)
+  const obterLinkDireto = (url) => {
+    if (!url) return '';
+    const match = url.match(/\/d\/(.*?)\//);
+    return match && match[1] ? `https://drive.google.com/thumbnail?id=${match[1]}&sz=w200` : url;
+  };
+
   const gerarPdfInscritos = () => {
     const janelaImpressao = window.open('', '_blank');
-    const obterLinkDireto = (url) => {
-      if (!url) return '';
-      const match = url.match(/\/d\/(.*?)\//);
-      return match && match[1] ? `https://drive.google.com/thumbnail?id=${match[1]}&sz=w200` : url;
-    };
 
     let linhasTabela = [...componentesFiltrados].sort((a, b) => a.nome.localeCompare(b.nome)).map((c, i) => `
       <tr>
@@ -557,6 +559,7 @@ function Relatorios() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', backgroundColor: '#FFFFFF' }}>
             <thead>
               <tr style={{ borderBottom: '2px solid #000000', textAlign: 'left' }}>
+                <th style={{ padding: '10px 5px', textAlign: 'center' }}><span style={{ color: '#000000' }}>Foto</span></th>
                 <th style={{ padding: '10px 5px' }}><span style={{ color: '#000000' }}>ID</span></th>
                 <th style={{ padding: '10px 5px' }}><span style={{ color: '#000000' }}>Nome</span></th>
                 <th style={{ padding: '10px 5px' }}><span style={{ color: '#000000' }}>CPF</span></th>
@@ -567,6 +570,13 @@ function Relatorios() {
             <tbody>
               {componentesFiltrados.map(c => (
                 <tr key={c.id} style={{ borderBottom: '1px solid #999999' }}>
+                  <td style={{ padding: '10px 5px', textAlign: 'center' }}>
+                    {c.fotoUrl ? (
+                      <img src={obterLinkDireto(c.fotoUrl)} alt={c.nome} style={{ width: '45px', height: '45px', objectFit: 'cover', borderRadius: '50%', border: '1px solid #ccc' }} />
+                    ) : (
+                      <div style={{ width: '45px', height: '45px', borderRadius: '50%', backgroundColor: '#eee', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', color: '#999' }}>Sem Foto</div>
+                    )}
+                  </td>
                   <td style={{ padding: '10px 5px' }}><span style={{ color: '#000000', fontWeight: 'bold' }}>#{c.id}</span></td>
                   <td style={{ padding: '10px 5px', textTransform: 'uppercase' }}><span style={{ color: '#000000', fontWeight: 'bold' }}>{c.nome}</span></td>
                   <td style={{ padding: '10px 5px' }}><span style={{ color: '#000000' }}>{c.cpf}</span></td>

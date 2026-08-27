@@ -131,6 +131,13 @@ function Relatorios() {
   // 2. FUNÇÕES DE EXPORTAÇÃO (PDFs)
   // =========================================================================
 
+  // Padroniza o CPF no formato 000.000.000-00, independente de como foi salvo na planilha
+  const formatarCpf = (cpf) => {
+    const digitos = (cpf || '').replace(/\D/g, '').slice(0, 11);
+    if (digitos.length !== 11) return cpf || '';
+    return digitos.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+  };
+
   // Converte o link de compartilhamento do Drive em um link direto de miniatura (usado no PDF e na pré-visualização)
   const obterLinkDireto = (url) => {
     if (!url) return '';
@@ -579,7 +586,7 @@ function Relatorios() {
                   </td>
                   <td style={{ padding: '10px 5px' }}><span style={{ color: '#000000', fontWeight: 'bold' }}>#{c.id}</span></td>
                   <td style={{ padding: '10px 5px', textTransform: 'uppercase' }}><span style={{ color: '#000000', fontWeight: 'bold' }}>{c.nome}</span></td>
-                  <td style={{ padding: '10px 5px' }}><span style={{ color: '#000000' }}>{c.cpf}</span></td>
+                  <td style={{ padding: '10px 5px', whiteSpace: 'nowrap' }}><span style={{ color: '#000000' }}>{formatarCpf(c.cpf)}</span></td>
                   <td style={{ padding: '10px 5px' }}><span style={{ backgroundColor: '#cccccc', color: '#000000', padding: '3px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{c.ala}</span></td>
                   <td style={{ padding: '10px 5px' }}><span style={{ color: '#000000' }}>{c.telefone}</span></td>
                 </tr>

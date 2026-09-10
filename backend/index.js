@@ -836,6 +836,57 @@ app.get('/frequencia/:id', async (req, res) => {
   }
 });
 
+// --- ROTA 16: Frequência de TODOS os componentes (para o PDF por ala da aba Presenças) ---
+// Cada aba de ensaio conta como 1 presença se o ID aparece nela, senão 1 ausência.
+app.get('/frequencia-geral', async (req, res) => {
+  try {
+    const idArquivoPresencas = process.env.PRESENCAS_SPREADSHEET_ID;
+
+    const [responseInscritos, planilhaInfo] = await Promise.all([
+      sheets.spreadsheets.values.get({ spreadsheetId: process.env.SPREADSHEET_ID, range: 'Inscricoes!A:P' }),
+      sheets.spreadsheets.get({ spreadsheetId: idArquivoPresencas }),
+    ]);
+
+    const linhasInscritos = (responseInscritos.data.values || []).slice(1);
+    const abasDeEnsaio = (planilhaInfo.data.sheets || [])
+      .map(aba => aba.properties.title)
+      .filter(titulo => titulo !== 'Geral' && titulo !== 'Alas');
+
+    const totalEnsaios = abasDeEnsaio.length;
+
+    // Conta em quantos ensaios cada ID esteve presente (no máximo 1 por ensaio)
+    const presencasPorId = new Map();
+    if (totalEnsaios > 0) {
+      const respostaLote = await sheets.spreadsheets.values.batchGet({
+        spreadsheetId: idArquivoPresencas,
+        ranges: abasDeEnsaio.map(titulo => `${titulo}!A2:A`),
+      });
+      (respostaLote.data.valueRanges || []).forEach(intervalo => {
+        const idsDoEnsaio = new Set((intervalo.values || []).map(linha => linha[0]).filter(Boolean));
+        idsDoEnsaio.forEach(id => presencasPorId.set(id, (presencasPorId.get(id) || 0) + 1));
+      });
+    }
+
+    const componentes = linhasInscritos.map(row => {
+      const id = row[0];
+      const presencas = presencasPorId.get(id) || 0;
+      return {
+        id,
+        nome: row[2] || '',
+        ala: row[10] || 'Sem Ala',
+        renovado: row[13] || 'Não',
+        presencas,
+        ausencias: totalEnsaios - presencas,
+      };
+    });
+
+    res.json({ totalEnsaios, componentes });
+  } catch (error) {
+    console.error('Erro ao calcular frequência geral:', error);
+    res.status(500).json({ error: 'Erro interno ao calcular frequência geral.' });
+  }
+});
+
 // --- INICIALIZAÇÃO DO SERVIDOR ---
 // O sistema utilizará a variável PORT que já foi declarada no topo do arquivo
 app.listen(PORT, () => {

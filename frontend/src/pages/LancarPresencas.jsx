@@ -17,7 +17,9 @@ function LancarPresencas() {
   useEffect(() => {
     api.get('/dados-relatorio')
       .then(res => {
-        const comp = res.data.componentes || [];
+        // A chamada considera apenas os componentes renovados (coluna N = "Sim"):
+        // é esse o total usado para o número de ausentes e as estatísticas por ala.
+        const comp = (res.data.componentes || []).filter(c => c.renovado === 'Sim');
         setComponentesBase(comp);
         setTotalAusentesManual(comp.length);
         const alasUnicas = [...new Set(comp.map(c => c.ala))].filter(Boolean).sort();
@@ -83,6 +85,91 @@ function LancarPresencas() {
       setMensagem({ texto: 'Falha ao salvar ensaio.', tipo: 'erro' });
     }
     setTimeout(() => setMensagem({ texto: '', tipo: '' }), 4000);
+  };
+
+  const gerarPdfFrequencia = async () => {
+    try {
+      const { data } = await api.get('/frequencia-geral');
+      const totalEnsaios = data.totalEnsaios || 0;
+      const componentes = (data.componentes || [])
+        .filter(c => c.renovado === 'Sim')
+        .sort((a, b) => a.nome.localeCompare(b.nome));
+
+      // Agrupa os componentes por ala
+      const porAla = {};
+      componentes.forEach(c => {
+        const ala = c.ala || 'Sem Ala';
+        if (!porAla[ala]) porAla[ala] = [];
+        porAla[ala].push(c);
+      });
+
+      const blocosAla = Object.keys(porAla).sort().map(ala => {
+        const lista = porAla[ala];
+        const totalPres = lista.reduce((s, c) => s + c.presencas, 0);
+        const totalAus = lista.reduce((s, c) => s + c.ausencias, 0);
+        const linhas = lista.map((c, i) => `
+          <tr>
+            <td style="padding:6px;border-bottom:1px solid #ddd;text-align:center;color:#000;">${i + 1}</td>
+            <td style="padding:6px;border-bottom:1px solid #ddd;text-transform:uppercase;font-weight:bold;color:#000;">${c.nome}</td>
+            <td style="padding:6px;border-bottom:1px solid #ddd;text-align:center;color:#005c33;font-weight:bold;">${c.presencas}</td>
+            <td style="padding:6px;border-bottom:1px solid #ddd;text-align:center;color:#ef4444;font-weight:bold;">${c.ausencias}</td>
+          </tr>`).join('');
+        return `
+          <div style="margin-bottom:28px;page-break-inside:avoid;">
+            <h3 style="color:#005c33;margin:0 0 6px 0;text-transform:uppercase;border-bottom:2px solid #005c33;padding-bottom:4px;">
+              Ala: ${ala} <span style="font-size:13px;color:#666;font-weight:normal;">(${lista.length} componente(s))</span>
+            </h3>
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead>
+                <tr>
+                  <th style="background:#005c33;color:#fff;padding:8px;width:6%;text-align:center;">Nº</th>
+                  <th style="background:#005c33;color:#fff;padding:8px;width:54%;text-align:left;">Nome Completo</th>
+                  <th style="background:#005c33;color:#fff;padding:8px;width:20%;text-align:center;">Presenças</th>
+                  <th style="background:#005c33;color:#fff;padding:8px;width:20%;text-align:center;">Ausências</th>
+                </tr>
+              </thead>
+              <tbody>${linhas}</tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="2" style="padding:8px;text-align:right;font-weight:bold;color:#000;border-top:2px solid #000;">Total da Ala:</td>
+                  <td style="padding:8px;text-align:center;font-weight:bold;color:#005c33;border-top:2px solid #000;">${totalPres}</td>
+                  <td style="padding:8px;text-align:center;font-weight:bold;color:#ef4444;border-top:2px solid #000;">${totalAus}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>`;
+      }).join('');
+
+      const janela = window.open('', '_blank');
+      janela.document.write(`
+        <html>
+          <head>
+            <title>Relatório de Frequência por Ala - Mancha Verde</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 30px; color: #333; }
+              .header { text-align:center; border-bottom:2px solid #005c33; padding-bottom:10px; margin-bottom:20px; }
+              .title { color:#005c33; margin:0; font-size:22px; text-transform:uppercase; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1 class="title">G.R.C.E.S. Mancha Verde</h1>
+              <h2>Relatório de Frequência por Ala</h2>
+              <div style="font-size:12px;color:#666;">
+                Emitido em: ${new Date().toLocaleDateString('pt-BR')} | Total de ensaios: ${totalEnsaios} | Componentes renovados: ${componentes.length}
+              </div>
+            </div>
+            ${blocosAla || '<p style="text-align:center;color:#666;">Nenhum componente renovado encontrado.</p>'}
+            <script>setTimeout(() => { window.print(); window.close(); }, 800);</script>
+          </body>
+        </html>
+      `);
+      janela.document.close();
+    } catch (err) {
+      console.error('Erro ao gerar PDF de frequência:', err);
+      setMensagem({ texto: 'Falha ao gerar o PDF de frequência.', tipo: 'erro' });
+      setTimeout(() => setMensagem({ texto: '', tipo: '' }), 4000);
+    }
   };
 
   if (carregando) return <div style={{ textAlign: 'center', marginTop: '50px', color: '#000000', fontWeight: 'bold' }}>Carregando...</div>;
@@ -157,6 +244,10 @@ function LancarPresencas() {
 
       <button onClick={salvarEnsaioCompleto} style={{ width: '100%', padding: '14px', backgroundColor: '#1e293b', color: '#FFFFFF', border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '15px', cursor: 'pointer' }}>
         💾 Encerrar Chamada e Criar Guia Temporal
+      </button>
+
+      <button onClick={gerarPdfFrequencia} style={{ width: '100%', marginTop: '12px', padding: '14px', backgroundColor: '#005c33', color: '#FFFFFF', border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '15px', cursor: 'pointer' }}>
+        📄 Gerar PDF (Frequência por Ala)
       </button>
     </div>
   );

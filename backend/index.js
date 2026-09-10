@@ -310,6 +310,105 @@ const converterDataBR = (str) => {
   return new Date(`${ano}-${mes}-${dia}`);
 };
 
+// Aceita "dd/mm/aaaa", "dd-mm-aaaa" e "aaaa-mm-dd" (o cadastro salva num, o
+// nome das abas de ensaio noutro). Retorna null se não conseguir interpretar.
+const parseDataFlex = (str) => {
+  if (!str) return null;
+  const s = String(str).trim();
+  const partes = s.includes('/') ? s.split('/') : s.split('-');
+  if (partes.length !== 3) return null;
+  const [a, b, c] = partes;
+  const iso = a.length === 4 ? `${a}-${b.padStart(2, '0')}-${c.padStart(2, '0')}`
+                             : `${c}-${b.padStart(2, '0')}-${a.padStart(2, '0')}`;
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? null : d;
+};
+
+// As abas de ensaio da planilha de presenças são as nomeadas pela data.
+// "Geral" e "Alas" são de controle; "Ala - X" é a matriz nominal derivada.
+const ehAbaDeEnsaio = (titulo) =>
+  titulo !== 'Geral' && titulo !== 'Alas' && !titulo.startsWith('Ala - ');
+
+// Reconstrói as abas "Ala - <ala>" (matriz ID x data, células P / A / vazio) a
+// partir das abas de ensaio (verdade sobre quem esteve presente) e do cadastro
+// (roster de renovados + data de cadastro). Idempotente: roda a cada chamada.
+// `ensaioAtual` (opcional) injeta o ensaio recém-gravado mesmo que a leitura da
+// aba nova ainda não o retorne. { label: "dd/mm/aaaa", ids: Set<string> }
+async function reconstruirMatrizesPorAla(ensaioAtual = null) {
+  const idPresencas = process.env.PRESENCAS_SPREADSHEET_ID;
+
+  const [infoPlanilha, respInscritos] = await Promise.all([
+    sheets.spreadsheets.get({ spreadsheetId: idPresencas }),
+    sheets.spreadsheets.values.get({ spreadsheetId: process.env.SPREADSHEET_ID, range: 'Inscricoes!A:P' }),
+  ]);
+
+  const titulos = (infoPlanilha.data.sheets || []).map(a => a.properties.title);
+  const abasEnsaio = titulos.filter(ehAbaDeEnsaio);
+
+  let presentesPorData = [];
+  if (abasEnsaio.length > 0) {
+    const respLote = await sheets.spreadsheets.values.batchGet({
+      spreadsheetId: idPresencas,
+      ranges: abasEnsaio.map(t => `${t}!A2:A`),
+    });
+    presentesPorData = abasEnsaio.map((t, i) => ({
+      label: t.replaceAll('-', '/'),
+      ids: new Set((respLote.data.valueRanges?.[i]?.values || []).map(l => l[0]).filter(Boolean)),
+    }));
+  }
+
+  if (ensaioAtual) {
+    const existente = presentesPorData.find(p => p.label === ensaioAtual.label);
+    if (existente) ensaioAtual.ids.forEach(id => existente.ids.add(id));
+    else presentesPorData.push({ label: ensaioAtual.label, ids: new Set(ensaioAtual.ids) });
+  }
+
+  if (presentesPorData.length === 0) return;
+  presentesPorData.sort((x, y) => (parseDataFlex(x.label) || 0) - (parseDataFlex(y.label) || 0));
+  const colunasData = presentesPorData.map(p => p.label);
+
+  const renovados = (respInscritos.data.values || []).slice(1)
+    .filter(r => (r[13] || '') === 'Sim')
+    .map(r => ({ id: r[0], nome: r[2] || '', ala: (r[10] || 'Sem Ala').trim(), cadastro: parseDataFlex(r[11]) }));
+
+  const porAla = {};
+  renovados.forEach(c => { (porAla[c.ala] = porAla[c.ala] || []).push(c); });
+  if (Object.keys(porAla).length === 0) return;
+
+  // Cria as abas "Ala - X" que ainda não existem
+  const existentes = new Set(titulos);
+  const aCriar = Object.keys(porAla).map(ala => `Ala - ${ala}`).filter(nome => !existentes.has(nome));
+  if (aCriar.length > 0) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: idPresencas,
+      requestBody: { requests: aCriar.map(title => ({ addSheet: { properties: { title } } })) },
+    });
+  }
+
+  // Monta cada matriz e grava tudo em lote (limpa antes, pois o roster pode encolher)
+  const dados = Object.entries(porAla).map(([ala, comps]) => {
+    comps.sort((a, b) => a.nome.localeCompare(b.nome));
+    const corpo = comps.map(c => {
+      const celulas = presentesPorData.map(p => {
+        if (p.ids.has(c.id)) return 'P';
+        const dataEnsaio = parseDataFlex(p.label);
+        return (!c.cadastro || !dataEnsaio || dataEnsaio >= c.cadastro) ? 'A' : '';
+      });
+      return [c.id, c.nome, ...celulas];
+    });
+    return { range: `Ala - ${ala}!A1`, values: [['ID', 'Nome', ...colunasData], ...corpo] };
+  });
+
+  await sheets.spreadsheets.values.batchClear({
+    spreadsheetId: idPresencas,
+    requestBody: { ranges: Object.keys(porAla).map(ala => `Ala - ${ala}`) },
+  });
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId: idPresencas,
+    requestBody: { valueInputOption: 'RAW', data: dados },
+  });
+}
+
 // --- ROTA 5: Busca Dados Cadastrais e Histórico ---
 app.get('/dados-relatorio', async (req, res) => {
   try {
@@ -349,7 +448,7 @@ app.get('/dados-relatorio', async (req, res) => {
     const planilhaPresencasInfo = await sheets.spreadsheets.get({ spreadsheetId: idArquivoPresencas });
     const abasDeEnsaio = (planilhaPresencasInfo.data.sheets || [])
       .map(aba => aba.properties.title)
-      .filter(titulo => titulo !== 'Geral' && titulo !== 'Alas');
+      .filter(ehAbaDeEnsaio);
 
     let dadosPresencas = [];
     let historicoAlas = [];
@@ -526,6 +625,15 @@ app.post('/registrar-ensaio-completo', async (req, res) => {
         spreadsheetId: idArquivoPresencas, range: `${nomeNovaAba}!A:C`, valueInputOption: 'USER_ENTERED',
         resource: { values: [['ID do Componente', 'Nome do Componente', 'Ala'], ...linhasNominais] },
       });
+    }
+
+    // Reconstrói as abas "Ala - X" (matriz nominal de presenças/ausências).
+    // Falha aqui não invalida o ensaio: os registros principais já foram gravados.
+    try {
+      const idsPresentes = new Set((listaNominal || []).map(comp => comp.id).filter(Boolean));
+      await reconstruirMatrizesPorAla({ label: data, ids: idsPresentes });
+    } catch (e) {
+      console.error('Falha ao reconstruir matrizes por ala:', e);
     }
 
     res.json({ success: true });
@@ -798,87 +906,93 @@ app.put('/marcar-renovacao/:id', async (req, res) => {
 });
 
 // --- ROTA 14: Frequência histórica de um componente (presenças e faltas) ---
+// Ausência só conta a partir da data de cadastro do componente.
 app.get('/frequencia/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const idArquivoPresencas = process.env.PRESENCAS_SPREADSHEET_ID;
 
-    // 1. Lista as abas de ensaio já registradas (cada ensaio vira uma aba com o nome da data;
-    // "Geral" e "Alas" são abas de controle, não contam como ensaios individuais)
-    const planilhaInfo = await sheets.spreadsheets.get({ spreadsheetId: idArquivoPresencas });
+    const [planilhaInfo, respInscritos] = await Promise.all([
+      sheets.spreadsheets.get({ spreadsheetId: idArquivoPresencas }),
+      sheets.spreadsheets.values.get({ spreadsheetId: process.env.SPREADSHEET_ID, range: 'Inscricoes!A:L' }),
+    ]);
+
+    const linhaComp = (respInscritos.data.values || []).find(row => row[0] === id);
+    const dataCadastro = linhaComp ? parseDataFlex(linhaComp[11]) : null;
+
     const abasDeEnsaio = (planilhaInfo.data.sheets || [])
       .map(aba => aba.properties.title)
-      .filter(titulo => titulo !== 'Geral' && titulo !== 'Alas');
+      .filter(ehAbaDeEnsaio);
 
     if (abasDeEnsaio.length === 0) {
       return res.json({ presencas: 0, ausencias: 0, totalEnsaios: 0 });
     }
 
-    // 2. Busca a lista nominal (coluna A = ID do componente presente) de todas as abas de uma vez
     const respostaLote = await sheets.spreadsheets.values.batchGet({
       spreadsheetId: idArquivoPresencas,
       ranges: abasDeEnsaio.map(titulo => `${titulo}!A2:A`),
     });
 
     let presencas = 0;
-    (respostaLote.data.valueRanges || []).forEach(intervalo => {
-      const idsPresentes = (intervalo.values || []).map(linha => linha[0]);
-      if (idsPresentes.includes(id)) presencas += 1;
+    let ausencias = 0;
+    abasDeEnsaio.forEach((titulo, indice) => {
+      const idsPresentes = (respostaLote.data.valueRanges?.[indice]?.values || []).map(linha => linha[0]);
+      if (idsPresentes.includes(id)) {
+        presencas += 1;
+      } else {
+        const dataEnsaio = parseDataFlex(titulo.replaceAll('-', '/'));
+        if (!dataCadastro || !dataEnsaio || dataEnsaio >= dataCadastro) ausencias += 1;
+      }
     });
 
-    const totalEnsaios = abasDeEnsaio.length;
-    const ausencias = totalEnsaios - presencas;
-
-    res.json({ presencas, ausencias, totalEnsaios });
+    res.json({ presencas, ausencias, totalEnsaios: presencas + ausencias });
   } catch (error) {
     console.error('Erro ao calcular frequência:', error);
     res.status(500).json({ error: 'Erro interno ao calcular frequência.' });
   }
 });
 
-// --- ROTA 16: Frequência de TODOS os componentes (para o PDF por ala da aba Presenças) ---
-// Cada aba de ensaio conta como 1 presença se o ID aparece nela, senão 1 ausência.
+// --- ROTA 16: Frequência de TODOS os componentes (lê as abas "Ala - X") ---
+// presenças = nº de "P" na linha do componente; ausências = nº de "A".
 app.get('/frequencia-geral', async (req, res) => {
   try {
     const idArquivoPresencas = process.env.PRESENCAS_SPREADSHEET_ID;
 
-    const [responseInscritos, planilhaInfo] = await Promise.all([
-      sheets.spreadsheets.values.get({ spreadsheetId: process.env.SPREADSHEET_ID, range: 'Inscricoes!A:P' }),
+    const [planilhaInfo, respInscritos] = await Promise.all([
       sheets.spreadsheets.get({ spreadsheetId: idArquivoPresencas }),
+      sheets.spreadsheets.values.get({ spreadsheetId: process.env.SPREADSHEET_ID, range: 'Inscricoes!A:N' }),
     ]);
 
-    const linhasInscritos = (responseInscritos.data.values || []).slice(1);
-    const abasDeEnsaio = (planilhaInfo.data.sheets || [])
-      .map(aba => aba.properties.title)
-      .filter(titulo => titulo !== 'Geral' && titulo !== 'Alas');
+    const renovadoPorId = new Map();
+    (respInscritos.data.values || []).slice(1).forEach(row => renovadoPorId.set(row[0], row[13] || 'Não'));
 
-    const totalEnsaios = abasDeEnsaio.length;
+    const titulos = (planilhaInfo.data.sheets || []).map(aba => aba.properties.title);
+    const abasAla = titulos.filter(t => t.startsWith('Ala - '));
+    const totalEnsaios = titulos.filter(ehAbaDeEnsaio).length;
 
-    // Conta em quantos ensaios cada ID esteve presente (no máximo 1 por ensaio)
-    const presencasPorId = new Map();
-    if (totalEnsaios > 0) {
+    const componentes = [];
+    if (abasAla.length > 0) {
       const respostaLote = await sheets.spreadsheets.values.batchGet({
         spreadsheetId: idArquivoPresencas,
-        ranges: abasDeEnsaio.map(titulo => `${titulo}!A2:A`),
+        ranges: abasAla.map(t => `${t}!A2:ZZZ`),
       });
-      (respostaLote.data.valueRanges || []).forEach(intervalo => {
-        const idsDoEnsaio = new Set((intervalo.values || []).map(linha => linha[0]).filter(Boolean));
-        idsDoEnsaio.forEach(id => presencasPorId.set(id, (presencasPorId.get(id) || 0) + 1));
+      (respostaLote.data.valueRanges || []).forEach((intervalo, indice) => {
+        const ala = abasAla[indice].replace(/^Ala - /, '');
+        (intervalo.values || []).forEach(row => {
+          const id = row[0];
+          if (!id) return;
+          const marcas = row.slice(2);
+          componentes.push({
+            id,
+            nome: row[1] || '',
+            ala,
+            renovado: renovadoPorId.get(id) || 'Não',
+            presencas: marcas.filter(m => m === 'P').length,
+            ausencias: marcas.filter(m => m === 'A').length,
+          });
+        });
       });
     }
-
-    const componentes = linhasInscritos.map(row => {
-      const id = row[0];
-      const presencas = presencasPorId.get(id) || 0;
-      return {
-        id,
-        nome: row[2] || '',
-        ala: row[10] || 'Sem Ala',
-        renovado: row[13] || 'Não',
-        presencas,
-        ausencias: totalEnsaios - presencas,
-      };
-    });
 
     res.json({ totalEnsaios, componentes });
   } catch (error) {

@@ -7,6 +7,7 @@ function Relatorios() {
   const [limites, setLimites] = useState({});
   const [presencas, setPresencas] = useState([]);
   const [historicoAlas, setHistoricoAlas] = useState([]);
+  const [frequenciaPorId, setFrequenciaPorId] = useState({});
   const [carregando, setCarregando] = useState(true);
 
   const [alaFiltro, setAlaFiltro] = useState('TODAS'); // Filtro da Tabela e PDFs
@@ -20,10 +21,16 @@ function Relatorios() {
 
   const puxarDados = async () => {
     try {
-      const [resposta, respostaAlas] = await Promise.all([
+      const [resposta, respostaAlas, respostaFreq] = await Promise.all([
         api.get('/dados-relatorio'),
         api.get('/alas'),
+        api.get('/frequencia-geral'),
       ]);
+      const mapaFreq = {};
+      (respostaFreq.data.componentes || []).forEach((c) => {
+        mapaFreq[c.id] = { presencas: c.presencas, ausencias: c.ausencias };
+      });
+      setFrequenciaPorId(mapaFreq);
       // Relatórios e PDFs consideram apenas os cadastros marcados como renovados
       const componentesRenovados = (resposta.data.componentes || []).filter((c) => c.renovado === 'Sim');
       setComponentes(componentesRenovados);
@@ -572,6 +579,8 @@ function Relatorios() {
                 <th style={{ padding: '10px 5px' }}><span style={{ color: '#000000' }}>CPF</span></th>
                 <th style={{ padding: '10px 5px' }}><span style={{ color: '#000000' }}>Ala</span></th>
                 <th style={{ padding: '10px 5px' }}><span style={{ color: '#000000' }}>WhatsApp</span></th>
+                <th style={{ padding: '10px 5px' }}><span style={{ color: '#005c33' }}>Presenças</span></th>
+                <th style={{ padding: '10px 5px' }}><span style={{ color: '#ef4444' }}>Ausências</span></th>
               </tr>
             </thead>
             <tbody>
@@ -589,6 +598,8 @@ function Relatorios() {
                   <td style={{ padding: '10px 5px', whiteSpace: 'nowrap' }}><span style={{ color: '#000000' }}>{formatarCpf(c.cpf)}</span></td>
                   <td style={{ padding: '10px 5px' }}><span style={{ backgroundColor: '#cccccc', color: '#000000', padding: '3px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}>{c.ala}</span></td>
                   <td style={{ padding: '10px 5px' }}><span style={{ color: '#000000' }}>{c.telefone}</span></td>
+                  <td style={{ padding: '10px 5px', textAlign: 'center' }}><span style={{ color: '#005c33', fontWeight: 'bold' }}>{frequenciaPorId[c.id] ? frequenciaPorId[c.id].presencas : '—'}</span></td>
+                  <td style={{ padding: '10px 5px', textAlign: 'center' }}><span style={{ color: '#ef4444', fontWeight: 'bold' }}>{frequenciaPorId[c.id] ? frequenciaPorId[c.id].ausencias : '—'}</span></td>
                 </tr>
               ))}
             </tbody>

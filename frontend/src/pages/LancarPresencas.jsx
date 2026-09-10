@@ -167,6 +167,9 @@ function LancarPresencas() {
               <div style="font-size:12px;color:#666;">
                 Emitido em: ${new Date().toLocaleDateString('pt-BR')} | Total de ensaios: ${totalEnsaios} | Componentes renovados: ${componentes.length}
               </div>
+              <div style="font-size:11px;color:#888;margin-top:4px;">
+                As ausências de cada componente são contadas a partir da data de cadastro dele.
+              </div>
             </div>
             ${blocosAla || '<p style="text-align:center;color:#666;">Nenhum componente renovado encontrado.</p>'}
           </body>

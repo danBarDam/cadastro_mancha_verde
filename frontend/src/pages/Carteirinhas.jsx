@@ -46,10 +46,17 @@ function Carteirinhas() {
 
     try {
       const { data } = await api.get(`/componentes-por-ala?ala=${encodeURIComponent(alaLote)}`);
-      const pendentes = data.filter((c) => c.carteirinhaGerada !== 'Sim');
+      // Só entram no lote os componentes marcados como renovados (coluna N = "Sim").
+      const renovados = data.filter((c) => c.renovado === 'Sim');
+      const ignorados = data.length - renovados.length;
+      const pendentes = renovados.filter((c) => c.carteirinhaGerada !== 'Sim');
 
       if (pendentes.length === 0) {
-        setStatusLote('Todas as carteirinhas desta ala já foram geradas.');
+        setStatusLote(
+          ignorados > 0
+            ? `Nenhuma carteirinha pendente entre os renovados desta ala (${ignorados} não renovado(s) ignorado(s)).`
+            : 'Todas as carteirinhas dos renovados desta ala já foram geradas.'
+        );
         return;
       }
 
@@ -86,11 +93,10 @@ function Carteirinhas() {
         setProgressoLote({ feitas: i + 1, total: pendentes.length });
       }
 
-      setStatusLote(
-        erros === 0
-          ? `${pendentes.length} carteirinha(s) gerada(s) e salva(s) no Drive.`
-          : `Concluído com ${erros} erro(s) de ${pendentes.length}. Verifique o console.`
-      );
+      const resumo = erros === 0
+        ? `${pendentes.length} carteirinha(s) gerada(s) e salva(s) no Drive.`
+        : `Concluído com ${erros} erro(s) de ${pendentes.length}. Verifique o console.`;
+      setStatusLote(ignorados > 0 ? `${resumo} ${ignorados} não renovado(s) ignorado(s).` : resumo);
     } catch (err) {
       console.error('Erro ao gerar lote de carteirinhas:', err);
       setStatusLote('Erro ao carregar os componentes da ala.');
@@ -186,7 +192,7 @@ function Carteirinhas() {
       <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '20px', marginBottom: '30px', backgroundColor: '#f8fafc' }}>
         <h3 style={{ margin: '0 0 12px 0', color: '#1e293b', fontSize: '16px' }}>Geração em Lote por Ala</h3>
         <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: '#64748b' }}>
-          Gera todas as carteirinhas da ala selecionada que ainda não foram feitas e salva os PNGs (fundo transparente) na pasta de carteirinhas do Drive.
+          Gera as carteirinhas dos componentes <strong>renovados</strong> da ala selecionada que ainda não foram feitas e salva os PNGs (fundo transparente) na pasta de carteirinhas do Drive. Não renovados são ignorados.
         </p>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
           <select

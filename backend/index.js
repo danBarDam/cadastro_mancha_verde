@@ -681,6 +681,7 @@ app.get('/componentes-por-ala', async (req, res) => {
         ala: row[10],
         data: row[11],
         fotoUrl: row[12],
+        renovado: row[13] || 'Não',
         carteirinhaGerada: row[15] || 'Não',
       }));
 

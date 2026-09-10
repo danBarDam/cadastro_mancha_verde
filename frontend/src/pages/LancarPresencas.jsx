@@ -149,9 +149,18 @@ function LancarPresencas() {
               body { font-family: Arial, sans-serif; margin: 30px; color: #333; }
               .header { text-align:center; border-bottom:2px solid #005c33; padding-bottom:10px; margin-bottom:20px; }
               .title { color:#005c33; margin:0; font-size:22px; text-transform:uppercase; }
+              .barra-acoes { text-align:center; margin-bottom:25px; }
+              .barra-acoes button { padding:10px 22px; margin:0 6px; border:none; border-radius:6px; font-weight:bold; font-size:14px; cursor:pointer; }
+              .btn-imprimir { background:#005c33; color:#fff; }
+              .btn-fechar { background:#e2e8f0; color:#1e293b; }
+              @media print { .barra-acoes { display:none; } body { margin:0; } }
             </style>
           </head>
           <body>
+            <div class="barra-acoes">
+              <button class="btn-imprimir" onclick="window.print()">🖨️ Imprimir</button>
+              <button class="btn-fechar" onclick="window.close()">Fechar</button>
+            </div>
             <div class="header">
               <h1 class="title">G.R.C.E.S. Mancha Verde</h1>
               <h2>Relatório de Frequência por Ala</h2>
@@ -160,7 +169,6 @@ function LancarPresencas() {
               </div>
             </div>
             ${blocosAla || '<p style="text-align:center;color:#666;">Nenhum componente renovado encontrado.</p>'}
-            <script>setTimeout(() => { window.print(); window.close(); }, 800);</script>
           </body>
         </html>
       `);
@@ -247,7 +255,7 @@ function LancarPresencas() {
       </button>
 
       <button onClick={gerarPdfFrequencia} style={{ width: '100%', marginTop: '12px', padding: '14px', backgroundColor: '#005c33', color: '#FFFFFF', border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '15px', cursor: 'pointer' }}>
-        📄 Gerar PDF (Frequência por Ala)
+        📄 Ver Relatório de Frequência por Ala
       </button>
     </div>
   );

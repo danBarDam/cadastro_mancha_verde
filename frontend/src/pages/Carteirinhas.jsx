@@ -285,8 +285,8 @@ function Carteirinhas() {
                   {componente.nome}
                 </div>
                 <div style={{ fontSize: '13px', color: '#64748b' }}>{componente.ala} | #{componente.id}</div>
-                <div style={{ marginTop: '4px' }} onClick={(e) => e.stopPropagation()}>
-                  <IndicadorCarteirinha componente={componente} aoGerar={marcarCarteirinhaGerada} />
+                <div style={{ marginTop: '4px' }}>
+                  <IndicadorCarteirinha componente={componente} />
                 </div>
               </div>
               <button

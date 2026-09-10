@@ -63,12 +63,6 @@ function Pesquisa() {
     }
   };
 
-  const marcarCarteirinhaGerada = (id) => {
-    setResultados((prev) => prev.map((item) => (
-      item.id === id ? { ...item, carteirinhaGerada: 'Sim' } : item
-    )));
-  };
-
   const alternarRenovacao = async (componente) => {
     const novoValor = componente.renovado === 'Sim' ? 'Não' : 'Sim';
 
@@ -173,7 +167,7 @@ function Pesquisa() {
                   ? `${frequencias[componente.id].presencas} presenças / ${frequencias[componente.id].ausencias} faltas`
                   : 'Calculando...'}
               </p>
-              <IndicadorCarteirinha componente={componente} aoGerar={marcarCarteirinhaGerada} />
+              <IndicadorCarteirinha componente={componente} />
             </div>
 
             {/* Crachá da Ala e Renovação */}

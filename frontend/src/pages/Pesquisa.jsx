@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import api from '../utils/api';
 import { converterLinkDrive } from '../utils/imagem';
 import ModalEdicaoCadastro from '../components/ModalEdicaoCadastro';
+import IndicadorCarteirinha from '../components/IndicadorCarteirinha';
 
 function Pesquisa() {
   const [termoBusca, setTermoBusca] = useState('');
@@ -60,6 +61,12 @@ function Pesquisa() {
       console.error('Erro ao excluir cadastro:', err);
       alert('Erro ao excluir o cadastro. Tente novamente.');
     }
+  };
+
+  const marcarCarteirinhaGerada = (id) => {
+    setResultados((prev) => prev.map((item) => (
+      item.id === id ? { ...item, carteirinhaGerada: 'Sim' } : item
+    )));
   };
 
   const alternarRenovacao = async (componente) => {
@@ -160,12 +167,13 @@ function Pesquisa() {
               <p style={{ margin: '0 0 5px 0', fontSize: '14px', color: '#64748b' }}>
                 <strong>Endereço:</strong> {componente.rua}, {componente.numero} - {componente.bairro}
               </p>
-              <p style={{ margin: '0', fontSize: '14px', color: '#64748b' }}>
+              <p style={{ margin: '0 0 5px 0', fontSize: '14px', color: '#64748b' }}>
                 <strong>Frequência:</strong>{' '}
                 {frequencias[componente.id]
                   ? `${frequencias[componente.id].presencas} presenças / ${frequencias[componente.id].ausencias} faltas`
                   : 'Calculando...'}
               </p>
+              <IndicadorCarteirinha componente={componente} aoGerar={marcarCarteirinhaGerada} />
             </div>
 
             {/* Crachá da Ala e Renovação */}

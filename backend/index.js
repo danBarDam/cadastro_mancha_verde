@@ -212,14 +212,15 @@ app.post('/cadastro', upload.single('foto'), async (req, res) => {
     // 2. Salvar todos os dados na Planilha (mantido via Service Account)
     // A coluna N (renovado) já entra como "Sim" ao salvar, igual ao efeito do
     // botão "Marcar Renovação" da tela de Pesquisa. A coluna O guarda a cidade
-    // (preenchida via ViaCEP na tela de cadastro).
+    // (preenchida via ViaCEP na tela de cadastro). A coluna P marca se a
+    // carteirinha já foi gerada — todo cadastro novo entra como "Não".
     const dadosParaSalvar = [
-      id, tipoCadastro, nome, cpf, telefone, cep, rua, bairro, numero, complemento, ala, data, fotoUrl, 'Sim', cidade || ''
+      id, tipoCadastro, nome, cpf, telefone, cep, rua, bairro, numero, complemento, ala, data, fotoUrl, 'Sim', cidade || '', 'Não'
     ];
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.SPREADSHEET_ID,
-      range: 'Inscricoes!A:O',
+      range: 'Inscricoes!A:P',
       valueInputOption: 'USER_ENTERED',
       requestBody: {
         values: [dadosParaSalvar],
@@ -245,7 +246,7 @@ app.get('/buscar', async (req, res) => {
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.SPREADSHEET_ID,
-      range: 'Inscricoes!A:O', // Coluna N = renovado (Sim/Não), Coluna O = cidade
+      range: 'Inscricoes!A:P', // N = renovado (Sim/Não), O = cidade, P = carteirinha gerada (Sim/Não)
     });
 
     const rows = response.data.values;
@@ -292,6 +293,7 @@ app.get('/buscar', async (req, res) => {
       fotoUrl: row[12],
       renovado: row[13] || 'Não',
       cidade: row[14] || '',
+      carteirinhaGerada: row[15] || 'Não',
     }));
 
     res.json(dadosFormatados);
@@ -629,10 +631,63 @@ app.post('/salvar-carteirinha', upload.single('imagem'), async (req, res) => {
       return res.status(500).json({ error: 'Erro ao salvar carteirinha no Drive: ' + (scriptData.erro || scriptData.error) });
     }
 
+    // Marca a coluna P (carteirinha gerada) da linha correspondente ao ID.
+    // Falha aqui não invalida o upload: a imagem já está no Drive.
+    try {
+      const respLinhas = await sheets.spreadsheets.values.get({
+        spreadsheetId: process.env.SPREADSHEET_ID,
+        range: 'Inscricoes!A:A',
+      });
+      const linhas = respLinhas.data.values || [];
+      const indiceLinha = linhas.findIndex(linha => linha[0] === id);
+      if (indiceLinha !== -1) {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: process.env.SPREADSHEET_ID,
+          range: `Inscricoes!P${indiceLinha + 1}`,
+          valueInputOption: 'USER_ENTERED',
+          requestBody: { values: [['Sim']] },
+        });
+      }
+    } catch (e) {
+      console.error('Falha ao marcar carteirinha como gerada na planilha:', e);
+    }
+
     res.json({ success: true, message: 'Carteirinha salva com sucesso!', url: scriptData.url });
   } catch (error) {
     console.error('Erro ao salvar carteirinha:', error);
     res.status(500).json({ error: 'Erro interno ao salvar a carteirinha.' });
+  }
+});
+
+// --- ROTA 15: Lista os componentes de uma ala (para geração de carteirinhas em lote) ---
+app.get('/componentes-por-ala', async (req, res) => {
+  try {
+    const { ala } = req.query;
+    if (!ala) return res.status(400).json({ error: 'Ala não informada.' });
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.SPREADSHEET_ID,
+      range: 'Inscricoes!A:P',
+    });
+
+    const rows = response.data.values || [];
+    const alaTratada = ala.trim().toLowerCase();
+
+    const componentes = rows.slice(1)
+      .filter(row => (row[10] || '').trim().toLowerCase() === alaTratada)
+      .map(row => ({
+        id: row[0],
+        nome: row[2],
+        ala: row[10],
+        data: row[11],
+        fotoUrl: row[12],
+        carteirinhaGerada: row[15] || 'Não',
+      }));
+
+    res.json(componentes);
+  } catch (error) {
+    console.error('Erro ao listar componentes por ala:', error);
+    res.status(500).json({ error: 'Erro interno ao listar componentes da ala.' });
   }
 });
 
@@ -650,7 +705,7 @@ app.put('/atualizar-cadastro/:id', upload.single('foto'), async (req, res) => {
     // 1. Localiza a linha do cadastro pelo ID (coluna A)
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.SPREADSHEET_ID,
-      range: 'Inscricoes!A:O',
+      range: 'Inscricoes!A:P',
     });
 
     const linhas = response.data.values || [];
@@ -662,6 +717,7 @@ app.put('/atualizar-cadastro/:id', upload.single('foto'), async (req, res) => {
 
     let fotoUrl = linhas[indiceLinha][12] || '';
     const renovado = linhas[indiceLinha][13] || 'Não'; // Edição não mexe na renovação
+    const carteirinhaGerada = linhas[indiceLinha][15] || 'Não'; // Edição não mexe no status da carteirinha
 
     // 2. Se uma nova foto foi enviada, sobe pro Drive via o mesmo Web App do cadastro
     if (novaFoto) {
@@ -687,10 +743,10 @@ app.put('/atualizar-cadastro/:id', upload.single('foto'), async (req, res) => {
     const linhaPlanilha = indiceLinha + 1; // Sheets é 1-indexado
     await sheets.spreadsheets.values.update({
       spreadsheetId: process.env.SPREADSHEET_ID,
-      range: `Inscricoes!A${linhaPlanilha}:O${linhaPlanilha}`,
+      range: `Inscricoes!A${linhaPlanilha}:P${linhaPlanilha}`,
       valueInputOption: 'USER_ENTERED',
       requestBody: {
-        values: [[id, tipoCadastro, nome, cpf, telefone, cep, rua, bairro, numero, complemento, ala, data, fotoUrl, renovado, cidade || '']],
+        values: [[id, tipoCadastro, nome, cpf, telefone, cep, rua, bairro, numero, complemento, ala, data, fotoUrl, renovado, cidade || '', carteirinhaGerada]],
       },
     });
 

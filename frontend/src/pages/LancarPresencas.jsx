@@ -29,12 +29,21 @@ function LancarPresencas() {
       .finally(() => setCarregando(false));
   }, []);
 
-  const resultadosBusca = componentesBase.filter(c => {
-    if (!termoBusca) return false;
-    if (presentesNaQuadra.some(p => p.id === c.id)) return false; 
-    const buscaLower = termoBusca.toLowerCase();
-    return c.nome.toLowerCase().includes(buscaLower) || c.id === termoBusca;
-  });
+  // Busca por nome (parcial) ou por ID. O ID é salvo com 8 dígitos e zeros à
+  // esquerda ("00000012"), então aceitamos tanto o número digitado ("12")
+  // quanto trechos do ID completo.
+  const filtrarComponentes = (termo) => {
+    const t = termo.trim().toLowerCase();
+    if (!t) return [];
+    const tNum = t.replace(/\D/g, '');
+    return componentesBase.filter(c => {
+      if (presentesNaQuadra.some(p => p.id === c.id)) return false;
+      if (c.nome.toLowerCase().includes(t)) return true;
+      const id = String(c.id).toLowerCase();
+      if (id.includes(t)) return true;
+      return tNum !== '' && id.replace(/^0+/, '') === tNum.replace(/^0+/, '');
+    });
+  };
 
   const marcarPresente = (componente) => {
     const novaLista = [...presentesNaQuadra, componente];
@@ -219,12 +228,15 @@ function LancarPresencas() {
         
         {termoBusca && (
           <div style={{ marginTop: '4px', border: '1px solid #cbd5e1', borderRadius: '6px', maxHeight: '180px', overflowY: 'auto', backgroundColor: '#FFFFFF' }}>
-            {componentesBase.filter(c => !presentesNaQuadra.some(p => p.id === c.id) && (c.nome.toLowerCase().includes(termoBusca.toLowerCase()) || c.id === termoBusca)).map(comp => (
+            {filtrarComponentes(termoBusca).map(comp => (
               <div key={comp.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 15px', borderBottom: '1px solid #f1f5f9' }}>
-                <span style={{ color: '#000000', fontWeight: 'bold', textTransform: 'uppercase', fontSize: '13px' }}>{comp.nome} <span style={{ color: '#64748b' }}>({comp.ala})</span></span>
+                <span style={{ color: '#000000', fontWeight: 'bold', textTransform: 'uppercase', fontSize: '13px' }}>#{comp.id} - {comp.nome} <span style={{ color: '#64748b' }}>({comp.ala})</span></span>
                 <button onClick={() => marcarPresente(comp)} style={{ padding: '6px 12px', backgroundColor: '#005c33', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>Confirmar</button>
               </div>
             ))}
+            {filtrarComponentes(termoBusca).length === 0 && (
+              <div style={{ padding: '10px 15px', color: '#64748b', fontSize: '13px' }}>Nenhum componente encontrado.</div>
+            )}
           </div>
         )}
       </div>

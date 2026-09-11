@@ -14,6 +14,11 @@ function LancarPresencas() {
   const [totalAusentesManual, setTotalAusentesManual] = useState(0);
   const [alaFiltroVisuais, setAlaFiltroVisuais] = useState('TODAS');
 
+  const [idsImportar, setIdsImportar] = useState('');
+  const [substituirImportacao, setSubstituirImportacao] = useState(false);
+  const [importando, setImportando] = useState(false);
+  const [resultadoImportacao, setResultadoImportacao] = useState(null);
+
   useEffect(() => {
     api.get('/dados-relatorio')
       .then(res => {
@@ -94,6 +99,40 @@ function LancarPresencas() {
       setMensagem({ texto: 'Falha ao salvar ensaio.', tipo: 'erro' });
     }
     setTimeout(() => setMensagem({ texto: '', tipo: '' }), 4000);
+  };
+
+  const importarPresencas = async () => {
+    const listaIds = idsImportar.split(/[\s,;]+/).map(s => s.trim()).filter(Boolean);
+    if (!dataEnsaio) {
+      setMensagem({ texto: 'Selecione a data do ensaio antes de importar.', tipo: 'erro' });
+      return;
+    }
+    if (listaIds.length === 0) {
+      setMensagem({ texto: 'Cole ao menos um ID na caixa de importação.', tipo: 'erro' });
+      return;
+    }
+
+    setImportando(true);
+    setResultadoImportacao(null);
+    try {
+      const { data } = await api.post('/importar-presencas', {
+        data: dataEnsaio,
+        ids: listaIds,
+        modo: substituirImportacao ? 'substituir' : 'mesclar',
+      });
+      setResultadoImportacao(data);
+      setMensagem({
+        texto: `Importação concluída para ${data.data}: ${data.adicionados} ID(s) do cadastro processado(s), ${data.totalPresentesNaData} presente(s) no total nessa data.`,
+        tipo: 'sucesso',
+      });
+      setIdsImportar('');
+    } catch (err) {
+      console.error(err);
+      setMensagem({ texto: err.response?.data?.error || 'Falha ao importar a lista de IDs.', tipo: 'erro' });
+    } finally {
+      setImportando(false);
+      setTimeout(() => setMensagem({ texto: '', tipo: '' }), 6000);
+    }
   };
 
   const gerarPdfFrequencia = async () => {
@@ -263,6 +302,43 @@ function LancarPresencas() {
             ))
           )}
         </div>
+      </div>
+
+      {/* IMPORTAÇÃO DE LISTA DE IDs */}
+      <div style={{ border: '1px solid #cbd5e1', borderRadius: '6px', padding: '15px', marginBottom: '25px', backgroundColor: '#f8fafc' }}>
+        <h4 style={{ margin: '0 0 6px 0', color: '#000000', fontWeight: 'bold' }}>Importar lista de IDs</h4>
+        <p style={{ margin: '0 0 10px 0', fontSize: '13px', color: '#64748b' }}>
+          Cole os IDs (um por linha ou separados por vírgula/espaço). O sistema busca nome e ala pelo cadastro
+          e contabiliza como presença na data <strong>{dataEnsaio.split('-').reverse().join('/')}</strong>.
+        </p>
+        <textarea
+          value={idsImportar}
+          onChange={(e) => setIdsImportar(e.target.value)}
+          placeholder={'00000012\n00000034\n45'}
+          rows={5}
+          style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#FFFFFF', color: '#000000', fontFamily: 'monospace', fontSize: '13px', boxSizing: 'border-box', resize: 'vertical' }}
+        />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', marginTop: '10px' }}>
+          <label style={{ fontSize: '13px', color: '#000000', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <input type="checkbox" checked={substituirImportacao} onChange={(e) => setSubstituirImportacao(e.target.checked)} />
+            Substituir a lista do dia (em vez de mesclar)
+          </label>
+          <button
+            onClick={importarPresencas}
+            disabled={importando}
+            style={{ padding: '10px 18px', backgroundColor: '#005c33', color: '#FFFFFF', border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}
+          >
+            {importando ? 'Importando...' : 'Importar e contabilizar'}
+          </button>
+        </div>
+        {resultadoImportacao && resultadoImportacao.naoEncontrados && resultadoImportacao.naoEncontrados.length > 0 && (
+          <div style={{ marginTop: '10px', padding: '10px', borderRadius: '6px', backgroundColor: '#fff4e5', border: '1px solid #f59e0b', fontSize: '13px', color: '#000000' }}>
+            <strong>{resultadoImportacao.naoEncontrados.length} ID(s) não encontrado(s) no cadastro</strong> (não contabilizados):
+            <div style={{ marginTop: '4px', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+              {resultadoImportacao.naoEncontrados.join(', ')}
+            </div>
+          </div>
+        )}
       </div>
 
       <button onClick={salvarEnsaioCompleto} style={{ width: '100%', padding: '14px', backgroundColor: '#1e293b', color: '#FFFFFF', border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '15px', cursor: 'pointer' }}>

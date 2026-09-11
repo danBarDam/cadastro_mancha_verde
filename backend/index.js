@@ -334,7 +334,9 @@ const ehAbaDeEnsaio = (titulo) =>
 // (roster de renovados + data de cadastro). Idempotente: roda a cada chamada.
 // `ensaioAtual` (opcional) injeta o ensaio recém-gravado mesmo que a leitura da
 // aba nova ainda não o retorne. { label: "dd/mm/aaaa", ids: Set<string> }
-async function reconstruirMatrizesPorAla(ensaioAtual = null) {
+// `opcoes.reconstruirResumos`: também refaz as abas "Geral" e "Alas" a partir
+// das abas por data (base de ausentes = componentes renovados).
+async function reconstruirMatrizesPorAla(ensaioAtual = null, opcoes = {}) {
   const idPresencas = process.env.PRESENCAS_SPREADSHEET_ID;
 
   const [infoPlanilha, respInscritos] = await Promise.all([
@@ -407,6 +409,44 @@ async function reconstruirMatrizesPorAla(ensaioAtual = null) {
     spreadsheetId: idPresencas,
     requestBody: { valueInputOption: 'RAW', data: dados },
   });
+
+  if (opcoes.reconstruirResumos) {
+    const alaPorId = new Map(renovados.map(c => [c.id, c.ala]));
+    const totalPorAla = {};
+    renovados.forEach(c => { totalPorAla[c.ala] = (totalPorAla[c.ala] || 0) + 1; });
+    const totalRenovados = renovados.length;
+
+    const linhasGeral = [['Data', 'Presentes', 'Ausentes']];
+    const linhasAlas = [['Data', 'Ala', 'Presentes', 'Ausentes']];
+
+    presentesPorData.forEach(p => {
+      const presPorAla = {};
+      let presRenov = 0;
+      p.ids.forEach(id => {
+        const ala = alaPorId.get(id);
+        if (ala !== undefined) { presRenov += 1; presPorAla[ala] = (presPorAla[ala] || 0) + 1; }
+      });
+      linhasGeral.push([p.label, presRenov, totalRenovados - presRenov]);
+      Object.keys(totalPorAla).sort().forEach(ala => {
+        linhasAlas.push([p.label, ala, presPorAla[ala] || 0, totalPorAla[ala] - (presPorAla[ala] || 0)]);
+      });
+    });
+
+    await sheets.spreadsheets.values.batchClear({
+      spreadsheetId: idPresencas,
+      requestBody: { ranges: ['Geral!A:C', 'Alas!A:D'] },
+    });
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: idPresencas,
+      requestBody: {
+        valueInputOption: 'RAW',
+        data: [
+          { range: 'Geral!A1', values: linhasGeral },
+          { range: 'Alas!A1', values: linhasAlas },
+        ],
+      },
+    });
+  }
 }
 
 // --- ROTA 5: Busca Dados Cadastrais e Histórico ---
@@ -640,6 +680,96 @@ app.post('/registrar-ensaio-completo', async (req, res) => {
   } catch (error) {
     console.error('Erro ao salvar ensaio completo:', error);
     res.status(500).json({ error: 'Erro interno ao salvar os registros.' });
+  }
+});
+
+// --- ROTA 8b: Importa uma lista de IDs como presentes numa data ---
+// Resolve nome/ala pelo cadastro, mescla (ou substitui) a aba da data,
+// reconstrói a matriz por ala e os resumos Geral/Alas.
+app.post('/importar-presencas', async (req, res) => {
+  try {
+    const { data, ids, modo } = req.body;
+    if (!data) return res.status(400).json({ error: 'A data é obrigatória.' });
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'Informe ao menos um ID.' });
+
+    const dataObj = parseDataFlex(data);
+    if (!dataObj) return res.status(400).json({ error: 'Data inválida.' });
+    const dd = String(dataObj.getDate()).padStart(2, '0');
+    const mm = String(dataObj.getMonth() + 1).padStart(2, '0');
+    const dataLabel = `${dd}/${mm}/${dataObj.getFullYear()}`;
+    const nomeAba = `${dd}-${mm}-${dataObj.getFullYear()}`;
+
+    const idPresencas = process.env.PRESENCAS_SPREADSHEET_ID;
+    const normId = (x) => {
+      const d = String(x).replace(/\D/g, '');
+      return d ? d.padStart(8, '0') : '';
+    };
+
+    const idsEntrada = [...new Set(ids.map(normId).filter(Boolean))];
+
+    // Resolve nome/ala pelo cadastro
+    const respInscritos = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.SPREADSHEET_ID, range: 'Inscricoes!A:N',
+    });
+    const mapaInscritos = new Map();
+    (respInscritos.data.values || []).slice(1).forEach(r => {
+      if (r[0]) mapaInscritos.set(normId(r[0]), { id: r[0], nome: r[2] || '', ala: (r[10] || 'Sem Ala').trim() });
+    });
+
+    const encontrados = [];
+    const naoEncontrados = [];
+    idsEntrada.forEach(id => {
+      const info = mapaInscritos.get(id);
+      if (info) encontrados.push(info);
+      else naoEncontrados.push(id);
+    });
+
+    // Garante a aba da data
+    const infoPlanilha = await sheets.spreadsheets.get({ spreadsheetId: idPresencas });
+    const abaExiste = (infoPlanilha.data.sheets || []).some(s => s.properties.title === nomeAba);
+    if (!abaExiste) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: idPresencas,
+        requestBody: { requests: [{ addSheet: { properties: { title: nomeAba } } }] },
+      });
+    }
+
+    // Lista final = (existentes, se mesclar) + encontrados, sem duplicar
+    const porId = new Map();
+    if ((modo || 'mesclar') !== 'substituir' && abaExiste) {
+      const respAba = await sheets.spreadsheets.values.get({ spreadsheetId: idPresencas, range: `${nomeAba}!A2:C` });
+      (respAba.data.values || []).filter(r => r[0]).forEach(r => {
+        porId.set(normId(r[0]), { id: r[0], nome: r[1] || '', ala: (r[2] || 'Sem Ala').trim() });
+      });
+    }
+    encontrados.forEach(c => porId.set(normId(c.id), c));
+    const listaFinal = [...porId.values()].sort((a, b) => a.nome.localeCompare(b.nome));
+
+    // Reescreve a aba da data
+    await sheets.spreadsheets.values.clear({ spreadsheetId: idPresencas, range: nomeAba });
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: idPresencas, range: `${nomeAba}!A1`, valueInputOption: 'RAW',
+      requestBody: {
+        values: [['ID do Componente', 'Nome do Componente', 'Ala'], ...listaFinal.map(c => [c.id, c.nome, c.ala])],
+      },
+    });
+
+    // Matriz por ala + resumos Geral/Alas
+    await reconstruirMatrizesPorAla(
+      { label: dataLabel, ids: new Set(listaFinal.map(c => c.id)) },
+      { reconstruirResumos: true }
+    );
+
+    res.json({
+      success: true,
+      data: dataLabel,
+      adicionados: encontrados.length,
+      totalPresentesNaData: listaFinal.length,
+      naoEncontrados,
+    });
+  } catch (error) {
+    console.error('Erro ao importar presenças:', error);
+    res.status(500).json({ error: 'Erro interno ao importar presenças.' });
   }
 });
 

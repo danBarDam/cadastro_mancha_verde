@@ -773,6 +773,57 @@ app.post('/importar-presencas', async (req, res) => {
   }
 });
 
+// --- ROTA 8c: Consulta a chamada de uma data (presentes/ausentes + lista) ---
+app.get('/presencas-da-data', async (req, res) => {
+  try {
+    const { data } = req.query;
+    if (!data) return res.status(400).json({ error: 'Data não informada.' });
+
+    const dataObj = parseDataFlex(data);
+    if (!dataObj) return res.status(400).json({ error: 'Data inválida.' });
+    const dd = String(dataObj.getDate()).padStart(2, '0');
+    const mm = String(dataObj.getMonth() + 1).padStart(2, '0');
+    const dataLabel = `${dd}/${mm}/${dataObj.getFullYear()}`;
+    const nomeAba = `${dd}-${mm}-${dataObj.getFullYear()}`;
+
+    const idPresencas = process.env.PRESENCAS_SPREADSHEET_ID;
+    const normId = (x) => { const d = String(x).replace(/\D/g, ''); return d ? d.padStart(8, '0') : ''; };
+
+    const [infoPlanilha, respInscritos] = await Promise.all([
+      sheets.spreadsheets.get({ spreadsheetId: idPresencas }),
+      sheets.spreadsheets.values.get({ spreadsheetId: process.env.SPREADSHEET_ID, range: 'Inscricoes!A:N' }),
+    ]);
+
+    const renovados = (respInscritos.data.values || []).slice(1).filter(r => (r[13] || '') === 'Sim');
+    const totalRenovados = renovados.length;
+    const idsRenovados = new Set(renovados.map(r => normId(r[0])));
+
+    const abaExiste = (infoPlanilha.data.sheets || []).some(s => s.properties.title === nomeAba);
+    if (!abaExiste) {
+      return res.json({ existe: false, data: dataLabel, presentes: 0, presentesRenovados: 0, ausentes: totalRenovados, listaPresentes: [] });
+    }
+
+    const respAba = await sheets.spreadsheets.values.get({ spreadsheetId: idPresencas, range: `${nomeAba}!A2:C` });
+    const listaPresentes = (respAba.data.values || [])
+      .filter(r => r[0])
+      .map(r => ({ id: r[0], nome: r[1] || '', ala: (r[2] || 'Sem Ala').trim() }));
+
+    const presentesRenovados = listaPresentes.filter(c => idsRenovados.has(normId(c.id))).length;
+
+    res.json({
+      existe: true,
+      data: dataLabel,
+      presentes: listaPresentes.length,
+      presentesRenovados,
+      ausentes: totalRenovados - presentesRenovados,
+      listaPresentes,
+    });
+  } catch (error) {
+    console.error('Erro ao consultar presenças da data:', error);
+    res.status(500).json({ error: 'Erro interno ao consultar a data.' });
+  }
+});
+
 // --- ROTA 9 - DE EXCLUSÃO ---
 app.delete('/excluir-cadastro/:id', async (req, res) => {
   try {

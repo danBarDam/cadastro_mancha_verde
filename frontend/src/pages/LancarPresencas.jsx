@@ -18,6 +18,8 @@ function LancarPresencas() {
   const [substituirImportacao, setSubstituirImportacao] = useState(false);
   const [importando, setImportando] = useState(false);
   const [resultadoImportacao, setResultadoImportacao] = useState(null);
+  const [consultandoData, setConsultandoData] = useState(false);
+  const [consultaData, setConsultaData] = useState(null);
 
   useEffect(() => {
     api.get('/dados-relatorio')
@@ -99,6 +101,27 @@ function LancarPresencas() {
       setMensagem({ texto: 'Falha ao salvar ensaio.', tipo: 'erro' });
     }
     setTimeout(() => setMensagem({ texto: '', tipo: '' }), 4000);
+  };
+
+  const consultarData = async () => {
+    if (!dataEnsaio) {
+      setMensagem({ texto: 'Selecione uma data para consultar.', tipo: 'erro' });
+      return;
+    }
+    setConsultandoData(true);
+    setConsultaData(null);
+    try {
+      const { data } = await api.get(`/presencas-da-data?data=${encodeURIComponent(dataEnsaio)}`);
+      setConsultaData(data);
+      setTotalPresentesManual(data.presentes);
+      setTotalAusentesManual(data.ausentes);
+      setPresentesNaQuadra(data.listaPresentes || []);
+    } catch (err) {
+      console.error(err);
+      setMensagem({ texto: err.response?.data?.error || 'Falha ao consultar a data.', tipo: 'erro' });
+    } finally {
+      setConsultandoData(false);
+    }
   };
 
   const importarPresencas = async () => {
@@ -248,7 +271,15 @@ function LancarPresencas() {
       <div style={{ display: 'flex', gap: '15px', marginBottom: '25px', flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: '180px' }}>
           <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 'bold', color: '#000000' }}>Data do Ensaio:</label>
-          <input type="date" value={dataEnsaio} onChange={(e) => setDataEnsaio(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#FFFFFF', color: '#000000', fontWeight: 'bold', boxSizing: 'border-box' }} />
+          <input type="date" value={dataEnsaio} onChange={(e) => { setDataEnsaio(e.target.value); setConsultaData(null); }} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#FFFFFF', color: '#000000', fontWeight: 'bold', boxSizing: 'border-box' }} />
+          <button
+            type="button"
+            onClick={consultarData}
+            disabled={consultandoData}
+            style={{ marginTop: '6px', width: '100%', padding: '8px', backgroundColor: '#334155', color: '#FFFFFF', border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer' }}
+          >
+            {consultandoData ? 'Consultando...' : '🔍 Consultar esta data'}
+          </button>
         </div>
         <div style={{ flex: 1, minWidth: '140px' }}>
           <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 'bold', color: '#000000' }}>Presentes:</label>
@@ -259,6 +290,22 @@ function LancarPresencas() {
           <input type="number" value={totalAusentesManual} onChange={(e) => setTotalAusentesManual(parseInt(e.target.value) || 0)} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#FFFFFF', color: '#000000', fontWeight: 'bold', boxSizing: 'border-box' }} />
         </div>
       </div>
+
+      {consultaData && (
+        <div style={{ marginBottom: '25px', padding: '12px 15px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontSize: '14px', color: '#000000' }}>
+          {consultaData.existe ? (
+            <>
+              <strong>Data {consultaData.data}:</strong>{' '}
+              <span style={{ color: '#005c33', fontWeight: 'bold' }}>{consultaData.presentes} presente(s)</span>
+              {' · '}
+              <span style={{ color: '#ef4444', fontWeight: 'bold' }}>{consultaData.ausentes} ausente(s)</span>
+              <span style={{ color: '#64748b' }}> (base: componentes renovados)</span>
+            </>
+          ) : (
+            <span style={{ color: '#64748b', fontWeight: 'bold' }}>Nenhuma chamada registrada para {consultaData.data}.</span>
+          )}
+        </div>
+      )}
 
       {/* CAMPO DE BUSCA HIGIENIZADO */}
       <div style={{ marginBottom: '25px' }}>

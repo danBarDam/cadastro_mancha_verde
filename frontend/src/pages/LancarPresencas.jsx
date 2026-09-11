@@ -28,7 +28,7 @@ function LancarPresencas() {
         // é esse o total usado para o número de ausentes e as estatísticas por ala.
         const comp = (res.data.componentes || []).filter(c => c.renovado === 'Sim');
         setComponentesBase(comp);
-        setTotalAusentesManual(comp.length);
+        setTotalAusentesManual(0);
         const alasUnicas = [...new Set(comp.map(c => c.ala))].filter(Boolean).sort();
         setListaAlas(alasUnicas);
       })

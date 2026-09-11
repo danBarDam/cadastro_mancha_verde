@@ -806,9 +806,17 @@ app.get('/presencas-da-data', async (req, res) => {
     const respAba = await sheets.spreadsheets.values.get({ spreadsheetId: idPresencas, range: `${nomeAba}!A2:C` });
     const listaPresentes = (respAba.data.values || [])
       .filter(r => r[0])
-      .map(r => ({ id: r[0], nome: r[1] || '', ala: (r[2] || 'Sem Ala').trim() }));
+      .map(r => ({ id: r[0], nome: r[1] || '', ala: (r[2] || 'Sem Ala').trim() }))
+      .sort((a, b) => a.nome.localeCompare(b.nome));
 
+    const idsPresentesSet = new Set(listaPresentes.map(c => normId(c.id)));
     const presentesRenovados = listaPresentes.filter(c => idsRenovados.has(normId(c.id))).length;
+
+    // Ausentes = componentes renovados que não constam como presentes nessa data
+    const listaAusentes = renovados
+      .filter(r => !idsPresentesSet.has(normId(r[0])))
+      .map(r => ({ id: r[0], nome: r[2] || '', ala: (r[10] || 'Sem Ala').trim() }))
+      .sort((a, b) => a.nome.localeCompare(b.nome));
 
     res.json({
       existe: true,
@@ -817,6 +825,7 @@ app.get('/presencas-da-data', async (req, res) => {
       presentesRenovados,
       ausentes: totalRenovados - presentesRenovados,
       listaPresentes,
+      listaAusentes,
     });
   } catch (error) {
     console.error('Erro ao consultar presenças da data:', error);

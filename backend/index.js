@@ -456,6 +456,41 @@ async function reconstruirMatrizesPorAla(ensaioAtual = null, opcoes = {}) {
   }
 }
 
+// Grava (ou atualiza) o tipo de um ensaio ("Comum" ou "Especial") na aba
+// "TiposEnsaio" (Data | Tipo) da planilha de presenças. Cria a aba na primeira
+// vez que for usada. Falha aqui não deve invalidar o registro do ensaio.
+async function salvarTipoEnsaio(dataLabel, tipo) {
+  const idPresencas = process.env.PRESENCAS_SPREADSHEET_ID;
+  const tipoValido = tipo === 'Especial' ? 'Especial' : 'Comum';
+
+  try {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: idPresencas,
+      requestBody: { requests: [{ addSheet: { properties: { title: 'TiposEnsaio' } } }] },
+    });
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: idPresencas, range: 'TiposEnsaio!A1', valueInputOption: 'RAW',
+      requestBody: { values: [['Data', 'Tipo']] },
+    });
+  } catch (e) { /* aba já existe */ }
+
+  const resposta = await sheets.spreadsheets.values.get({ spreadsheetId: idPresencas, range: 'TiposEnsaio!A:B' });
+  const linhas = resposta.data.values || [];
+  const indiceLinha = linhas.findIndex((linha, i) => i > 0 && linha[0] === dataLabel);
+
+  if (indiceLinha !== -1) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: idPresencas, range: `TiposEnsaio!B${indiceLinha + 1}`, valueInputOption: 'RAW',
+      requestBody: { values: [[tipoValido]] },
+    });
+  } else {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: idPresencas, range: 'TiposEnsaio!A:B', valueInputOption: 'RAW',
+      requestBody: { values: [[dataLabel, tipoValido]] },
+    });
+  }
+}
+
 // --- ROTA 5: Busca Dados Cadastrais e Histórico ---
 app.get('/dados-relatorio', async (req, res) => {
   try {
@@ -645,7 +680,7 @@ app.post('/marcar-presenca-individual', async (req, res) => {
 // --- ROTA 8: Grava Presenças e Ausências por Ala ---
 app.post('/registrar-ensaio-completo', async (req, res) => {
   try {
-    const { data, listaNominal } = req.body;
+    const { data, listaNominal, tipoEnsaio } = req.body;
     if (!data) return res.status(400).json({ error: 'A data é obrigatória.' });
 
     // Regra: só existe ensaio se houver ao menos 1 presença registrada. Uma
@@ -677,6 +712,13 @@ app.post('/registrar-ensaio-completo', async (req, res) => {
     const idsPresentes = new Set(listaNominal.map(comp => comp.id).filter(Boolean));
     await reconstruirMatrizesPorAla({ label: data, ids: idsPresentes }, { reconstruirResumos: true });
 
+    // Falha aqui não invalida o ensaio: presenças e matrizes já foram salvas.
+    try {
+      await salvarTipoEnsaio(data, tipoEnsaio);
+    } catch (e) {
+      console.error('Falha ao salvar o tipo do ensaio:', e);
+    }
+
     res.json({ success: true });
   } catch (error) {
     console.error('Erro ao salvar ensaio completo:', error);
@@ -689,7 +731,7 @@ app.post('/registrar-ensaio-completo', async (req, res) => {
 // reconstrói a matriz por ala e os resumos Geral/Alas.
 app.post('/importar-presencas', async (req, res) => {
   try {
-    const { data, ids, modo } = req.body;
+    const { data, ids, modo, tipoEnsaio } = req.body;
     if (!data) return res.status(400).json({ error: 'A data é obrigatória.' });
     if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'Informe ao menos um ID.' });
 
@@ -760,6 +802,13 @@ app.post('/importar-presencas', async (req, res) => {
       { label: dataLabel, ids: new Set(listaFinal.map(c => c.id)) },
       { reconstruirResumos: true }
     );
+
+    // Falha aqui não invalida a importação: presenças e matrizes já foram salvas.
+    try {
+      await salvarTipoEnsaio(dataLabel, tipoEnsaio);
+    } catch (e) {
+      console.error('Falha ao salvar o tipo do ensaio:', e);
+    }
 
     res.json({
       success: true,
@@ -1214,11 +1263,20 @@ app.get('/matriz-presencas', async (req, res) => {
     const titulos = (planilhaInfo.data.sheets || []).map(aba => aba.properties.title);
     const abasAla = titulos.filter(t => t.startsWith('Ala - '));
 
-    if (abasAla.length === 0) return res.json({ datas: [], componentes: [] });
+    if (abasAla.length === 0) return res.json({ datas: [], componentes: [], tipos: {} });
 
-    const respostaLote = await sheets.spreadsheets.values.batchGet({
-      spreadsheetId: idArquivoPresencas,
-      ranges: abasAla.map(t => `${t}!A1:ZZZ`),
+    const [respostaLote, respostaTipos] = await Promise.all([
+      sheets.spreadsheets.values.batchGet({
+        spreadsheetId: idArquivoPresencas,
+        ranges: abasAla.map(t => `${t}!A1:ZZZ`),
+      }),
+      sheets.spreadsheets.values.get({ spreadsheetId: idArquivoPresencas, range: 'TiposEnsaio!A:B' }).catch(() => ({ data: { values: [] } })),
+    ]);
+
+    // Datas sem registro na aba "TiposEnsaio" são consideradas "Comum" (padrão).
+    const tipos = {};
+    (respostaTipos.data.values || []).slice(1).forEach(row => {
+      if (row[0]) tipos[row[0]] = row[1] === 'Especial' ? 'Especial' : 'Comum';
     });
 
     let datas = [];
@@ -1244,7 +1302,7 @@ app.get('/matriz-presencas', async (req, res) => {
 
     componentes.sort((a, b) => a.ala.localeCompare(b.ala) || a.nome.localeCompare(b.nome));
 
-    res.json({ datas, componentes });
+    res.json({ datas, componentes, tipos });
   } catch (error) {
     console.error('Erro ao montar matriz de presenças:', error);
     res.status(500).json({ error: 'Erro interno ao montar a matriz de presenças.' });

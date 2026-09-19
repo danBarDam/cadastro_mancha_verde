@@ -4,6 +4,7 @@ import api from '../utils/api';
 function LancarPresencas() {
   const hoje = new Date().toISOString().split('T')[0];
   const [dataEnsaio, setDataEnsaio] = useState(hoje);
+  const [tipoEnsaio, setTipoEnsaio] = useState('Comum');
   const [termoBusca, setTermoBusca] = useState('');
   const [componentesBase, setComponentesBase] = useState([]);
   const [carregando, setCarregando] = useState(true);
@@ -81,6 +82,7 @@ function LancarPresencas() {
       await api.post('/registrar-ensaio-completo', {
         data: dataEnsaio.split('-').reverse().join('/'),
         listaNominal: presentesNaQuadra,
+        tipoEnsaio,
       });
 
       setMensagem({ texto: 'Dados salvos com sucesso na planilha exclusiva!', tipo: 'sucesso' });
@@ -90,6 +92,7 @@ function LancarPresencas() {
       setTotalPresentesManual(0);
       setTotalAusentesManual(componentesBase.length);
       setDataEnsaio(hoje);
+      setTipoEnsaio('Comum');
     } catch (err) {
       setMensagem({ texto: err.response?.data?.error || 'Falha ao salvar ensaio.', tipo: 'erro' });
     }
@@ -134,6 +137,7 @@ function LancarPresencas() {
         data: dataEnsaio,
         ids: listaIds,
         modo: substituirImportacao ? 'substituir' : 'mesclar',
+        tipoEnsaio,
       });
       setResultadoImportacao(data);
       setMensagem({
@@ -265,7 +269,7 @@ function LancarPresencas() {
   const gerarRelatorioMatrizPresencas = async () => {
     try {
       const { data } = await api.get('/matriz-presencas');
-      const { datas, componentes } = data;
+      const { datas, componentes, tipos = {} } = data;
 
       if (!datas || datas.length === 0) {
         setMensagem({ texto: 'Ainda não há nenhum ensaio registrado para montar o relatório.', tipo: 'erro' });
@@ -274,21 +278,43 @@ function LancarPresencas() {
       }
 
       const celula = (marca) => {
-        if (marca === 'P') return '<td style="padding:6px;text-align:center;background:#e8f5e9;color:#005c33;font-weight:bold;border:1px solid #cbd5e1;">P</td>';
-        if (marca === 'A') return '<td style="padding:6px;text-align:center;background:#fdeaea;color:#ef4444;font-weight:bold;border:1px solid #cbd5e1;">A</td>';
-        return '<td style="padding:6px;text-align:center;color:#cbd5e1;border:1px solid #cbd5e1;">—</td>';
+        if (marca === 'P') return '<td style="padding:4px;text-align:center;background:#e8f5e9;color:#005c33;font-weight:bold;border:1px solid #cbd5e1;">P</td>';
+        if (marca === 'A') return '<td style="padding:4px;text-align:center;background:#fdeaea;color:#ef4444;font-weight:bold;border:1px solid #cbd5e1;">A</td>';
+        return '<td style="padding:4px;text-align:center;color:#cbd5e1;border:1px solid #cbd5e1;">—</td>';
       };
 
       const linhasHtml = componentes.map((c, i) => `
         <tr>
-          <td style="padding:6px;text-align:center;border:1px solid #cbd5e1;color:#000;">${i + 1}</td>
-          <td style="padding:6px;border:1px solid #cbd5e1;color:#000;white-space:nowrap;">#${c.id}</td>
-          <td style="padding:6px;border:1px solid #cbd5e1;text-transform:uppercase;font-weight:bold;color:#000;white-space:nowrap;">${c.nome}</td>
-          <td style="padding:6px;border:1px solid #cbd5e1;text-align:center;color:#000;white-space:nowrap;">${c.ala}</td>
+          <td style="padding:4px;text-align:center;border:1px solid #cbd5e1;color:#000;">${i + 1}</td>
+          <td style="padding:4px;border:1px solid #cbd5e1;color:#000;word-break:break-word;">#${c.id}</td>
+          <td style="padding:4px;border:1px solid #cbd5e1;text-transform:uppercase;font-weight:bold;color:#000;word-break:break-word;">${c.nome}</td>
+          <td style="padding:4px;border:1px solid #cbd5e1;text-align:center;color:#000;word-break:break-word;">${c.ala}</td>
           ${datas.map(d => celula(c.marcas[d])).join('')}
         </tr>`).join('');
 
-      const colunasData = datas.map(d => `<th style="background:#005c33;color:#fff;padding:8px;text-align:center;white-space:nowrap;">${d}</th>`).join('');
+      // Datas de ensaio "Especial" ganham fundo verde claro no cabeçalho para
+      // se destacar das datas de ensaio "Comum" (fundo verde escuro padrão).
+      const colunasData = datas.map(d => {
+        const especial = tipos[d] === 'Especial';
+        const cor = especial ? 'background:#bbf7d0;color:#065f46;' : 'background:#005c33;color:#fff;';
+        return `<th style="${cor}padding:4px;text-align:center;word-break:break-word;">${d}${especial ? '<br/><span style="font-weight:normal;font-size:0.85em;">(Especial)</span>' : ''}</th>`;
+      }).join('');
+
+      // Colunas fixas somam 40% da largura; as datas dividem os 60% restantes
+      // igualmente entre si — assim a tabela sempre cabe na largura da folha,
+      // não importa se são 5 ou 50 datas (as colunas só ficam mais estreitas).
+      const larguraCadaData = (60 / datas.length).toFixed(2);
+      const colgroup = `
+        <colgroup>
+          <col style="width:4%;" />
+          <col style="width:8%;" />
+          <col style="width:20%;" />
+          <col style="width:8%;" />
+          ${datas.map(() => `<col style="width:${larguraCadaData}%;" />`).join('')}
+        </colgroup>`;
+
+      // Com muitas datas, reduz a fonte para as colunas de data continuarem legíveis
+      const fontePorTamanho = datas.length > 25 ? 8 : datas.length > 15 ? 9 : datas.length > 10 ? 10 : 12;
 
       const janela = window.open('', '_blank');
       janela.document.write(`
@@ -296,7 +322,7 @@ function LancarPresencas() {
           <head>
             <title>Relatório de Presenças por Data - Mancha Verde</title>
             <style>
-              @page { size: landscape; margin: 12mm; }
+              @page { size: landscape; margin: 10mm; }
               body { font-family: Arial, sans-serif; margin: 20px; color: #333; }
               .header { text-align:center; border-bottom:2px solid #005c33; padding-bottom:10px; margin-bottom:20px; }
               .title { color:#005c33; margin:0; font-size:22px; text-transform:uppercase; }
@@ -304,7 +330,7 @@ function LancarPresencas() {
               .barra-acoes button { padding:10px 22px; margin:0 6px; border:none; border-radius:6px; font-weight:bold; font-size:14px; cursor:pointer; }
               .btn-imprimir { background:#005c33; color:#fff; }
               .btn-fechar { background:#e2e8f0; color:#1e293b; }
-              table { border-collapse: collapse; width: 100%; font-size: 12px; }
+              table { border-collapse: collapse; table-layout: fixed; width: 100%; font-size: ${fontePorTamanho}px; }
               th { border: 1px solid #cbd5e1; }
               @media print { .barra-acoes { display:none; } body { margin:0; } }
             </style>
@@ -321,16 +347,18 @@ function LancarPresencas() {
                 Emitido em: ${new Date().toLocaleDateString('pt-BR')} | Ensaios: ${datas.length} | Componentes: ${componentes.length}
               </div>
               <div style="font-size:11px;color:#888;margin-top:4px;">
-                P = presente · A = ausente · — = ainda não cadastrado nessa data
+                P = presente · A = ausente · — = ainda não cadastrado nessa data ·
+                <span style="background:#bbf7d0;color:#065f46;padding:1px 6px;border-radius:4px;font-weight:bold;">fundo verde claro no cabeçalho = ensaio especial</span>
               </div>
             </div>
             <table>
+              ${colgroup}
               <thead>
                 <tr>
-                  <th style="background:#005c33;color:#fff;padding:8px;">Nº</th>
-                  <th style="background:#005c33;color:#fff;padding:8px;">ID</th>
-                  <th style="background:#005c33;color:#fff;padding:8px;text-align:left;">Nome Completo</th>
-                  <th style="background:#005c33;color:#fff;padding:8px;">Ala</th>
+                  <th style="background:#005c33;color:#fff;padding:4px;">Nº</th>
+                  <th style="background:#005c33;color:#fff;padding:4px;">ID</th>
+                  <th style="background:#005c33;color:#fff;padding:4px;text-align:left;">Nome Completo</th>
+                  <th style="background:#005c33;color:#fff;padding:4px;">Ala</th>
                   ${colunasData}
                 </tr>
               </thead>
@@ -373,6 +401,31 @@ function LancarPresencas() {
           >
             {consultandoData ? 'Consultando...' : '🔍 Consultar esta data'}
           </button>
+        </div>
+        <div style={{ flex: 1, minWidth: '180px' }}>
+          <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 'bold', color: '#000000' }}>Tipo do Ensaio:</label>
+          <div style={{ display: 'flex', gap: '6px', height: '38px' }}>
+            <label style={{
+              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+              padding: '8px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold',
+              border: `2px solid ${tipoEnsaio === 'Comum' ? '#005c33' : '#cbd5e1'}`,
+              backgroundColor: tipoEnsaio === 'Comum' ? '#e8f5e9' : '#FFFFFF',
+              color: '#000000',
+            }}>
+              <input type="radio" name="tipoEnsaio" value="Comum" checked={tipoEnsaio === 'Comum'} onChange={() => setTipoEnsaio('Comum')} />
+              Comum
+            </label>
+            <label style={{
+              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+              padding: '8px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold',
+              border: `2px solid ${tipoEnsaio === 'Especial' ? '#005c33' : '#cbd5e1'}`,
+              backgroundColor: tipoEnsaio === 'Especial' ? '#e8f5e9' : '#FFFFFF',
+              color: '#000000',
+            }}>
+              <input type="radio" name="tipoEnsaio" value="Especial" checked={tipoEnsaio === 'Especial'} onChange={() => setTipoEnsaio('Especial')} />
+              Especial
+            </label>
+          </div>
         </div>
         <div style={{ flex: 1, minWidth: '140px' }}>
           <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 'bold', color: '#000000' }}>Presentes:</label>

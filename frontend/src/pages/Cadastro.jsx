@@ -318,7 +318,6 @@ function Cadastro() {
                     border: '1px solid #cbd5e1',
                     boxSizing: 'border-box'
                 }}
-                required
                 />
                 <span style={{
                     flexShrink: 0,

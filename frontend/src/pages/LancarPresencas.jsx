@@ -20,6 +20,7 @@ function LancarPresencas() {
   const [resultadoImportacao, setResultadoImportacao] = useState(null);
   const [consultandoData, setConsultandoData] = useState(false);
   const [consultaData, setConsultaData] = useState(null);
+  const [recalculando, setRecalculando] = useState(false);
 
   useEffect(() => {
     api.get('/dados-relatorio')
@@ -73,32 +74,24 @@ function LancarPresencas() {
       return;
     }
 
-    // NOVA MATEMÁTICA: Calcula presentes e ausentes específicos de cada ala
-    const estatisticasAlas = listaAlas.map(ala => {
-      const pres = presentesNaQuadra.filter(p => p.ala === ala).length;
-      const totalDaAla = componentesBase.filter(c => c.ala === ala).length;
-      const aus = totalDaAla - pres;
-      return { ala, presentes: pres, ausentes: aus };
-    });
-
     try {
+      // O servidor recalcula presentes/ausentes (geral e por ala) a partir da
+      // lista nominal — ela é a fonte de verdade da chamada. Um ensaio sem
+      // nenhum presente é rejeitado (não vira uma data fantasma nos relatórios).
       await api.post('/registrar-ensaio-completo', {
         data: dataEnsaio.split('-').reverse().join('/'),
-        presentes: totalPresentesManual,
-        ausentes: totalAusentesManual,
         listaNominal: presentesNaQuadra,
-        estatisticasAlas: estatisticasAlas // Envia os dados avançados para o Sheets
       });
-      
+
       setMensagem({ texto: 'Dados salvos com sucesso na planilha exclusiva!', tipo: 'sucesso' });
-      
+
       // Reseta a tela perfeitamente sem travar
       setPresentesNaQuadra([]);
       setTotalPresentesManual(0);
       setTotalAusentesManual(componentesBase.length);
       setDataEnsaio(hoje);
     } catch (err) {
-      setMensagem({ texto: 'Falha ao salvar ensaio.', tipo: 'erro' });
+      setMensagem({ texto: err.response?.data?.error || 'Falha ao salvar ensaio.', tipo: 'erro' });
     }
     setTimeout(() => setMensagem({ texto: '', tipo: '' }), 4000);
   };
@@ -249,6 +242,107 @@ function LancarPresencas() {
     } catch (err) {
       console.error('Erro ao gerar PDF de frequência:', err);
       setMensagem({ texto: 'Falha ao gerar o PDF de frequência.', tipo: 'erro' });
+      setTimeout(() => setMensagem({ texto: '', tipo: '' }), 4000);
+    }
+  };
+
+  const recalcularPresencas = async () => {
+    if (!window.confirm('Isso vai recalcular os resumos de presença (Geral, Alas e matrizes por ala) a partir das chamadas reais, removendo datas sem nenhuma presença registrada. Continuar?')) return;
+
+    setRecalculando(true);
+    try {
+      await api.post('/recalcular-presencas');
+      setMensagem({ texto: 'Resumos de presença recalculados com sucesso. Datas sem presença registrada foram removidas da contagem.', tipo: 'sucesso' });
+    } catch (err) {
+      console.error('Erro ao recalcular presenças:', err);
+      setMensagem({ texto: err.response?.data?.error || 'Falha ao recalcular os resumos de presença.', tipo: 'erro' });
+    } finally {
+      setRecalculando(false);
+      setTimeout(() => setMensagem({ texto: '', tipo: '' }), 6000);
+    }
+  };
+
+  const gerarRelatorioMatrizPresencas = async () => {
+    try {
+      const { data } = await api.get('/matriz-presencas');
+      const { datas, componentes } = data;
+
+      if (!datas || datas.length === 0) {
+        setMensagem({ texto: 'Ainda não há nenhum ensaio registrado para montar o relatório.', tipo: 'erro' });
+        setTimeout(() => setMensagem({ texto: '', tipo: '' }), 4000);
+        return;
+      }
+
+      const celula = (marca) => {
+        if (marca === 'P') return '<td style="padding:6px;text-align:center;background:#e8f5e9;color:#005c33;font-weight:bold;border:1px solid #cbd5e1;">P</td>';
+        if (marca === 'A') return '<td style="padding:6px;text-align:center;background:#fdeaea;color:#ef4444;font-weight:bold;border:1px solid #cbd5e1;">A</td>';
+        return '<td style="padding:6px;text-align:center;color:#cbd5e1;border:1px solid #cbd5e1;">—</td>';
+      };
+
+      const linhasHtml = componentes.map((c, i) => `
+        <tr>
+          <td style="padding:6px;text-align:center;border:1px solid #cbd5e1;color:#000;">${i + 1}</td>
+          <td style="padding:6px;border:1px solid #cbd5e1;color:#000;white-space:nowrap;">#${c.id}</td>
+          <td style="padding:6px;border:1px solid #cbd5e1;text-transform:uppercase;font-weight:bold;color:#000;white-space:nowrap;">${c.nome}</td>
+          <td style="padding:6px;border:1px solid #cbd5e1;text-align:center;color:#000;white-space:nowrap;">${c.ala}</td>
+          ${datas.map(d => celula(c.marcas[d])).join('')}
+        </tr>`).join('');
+
+      const colunasData = datas.map(d => `<th style="background:#005c33;color:#fff;padding:8px;text-align:center;white-space:nowrap;">${d}</th>`).join('');
+
+      const janela = window.open('', '_blank');
+      janela.document.write(`
+        <html>
+          <head>
+            <title>Relatório de Presenças por Data - Mancha Verde</title>
+            <style>
+              @page { size: landscape; margin: 12mm; }
+              body { font-family: Arial, sans-serif; margin: 20px; color: #333; }
+              .header { text-align:center; border-bottom:2px solid #005c33; padding-bottom:10px; margin-bottom:20px; }
+              .title { color:#005c33; margin:0; font-size:22px; text-transform:uppercase; }
+              .barra-acoes { text-align:center; margin-bottom:25px; }
+              .barra-acoes button { padding:10px 22px; margin:0 6px; border:none; border-radius:6px; font-weight:bold; font-size:14px; cursor:pointer; }
+              .btn-imprimir { background:#005c33; color:#fff; }
+              .btn-fechar { background:#e2e8f0; color:#1e293b; }
+              table { border-collapse: collapse; width: 100%; font-size: 12px; }
+              th { border: 1px solid #cbd5e1; }
+              @media print { .barra-acoes { display:none; } body { margin:0; } }
+            </style>
+          </head>
+          <body>
+            <div class="barra-acoes">
+              <button class="btn-imprimir" onclick="window.print()">🖨️ Imprimir</button>
+              <button class="btn-fechar" onclick="window.close()">Fechar</button>
+            </div>
+            <div class="header">
+              <h1 class="title">G.R.C.E.S. Mancha Verde</h1>
+              <h2>Relatório de Presenças e Ausências por Data</h2>
+              <div style="font-size:12px;color:#666;">
+                Emitido em: ${new Date().toLocaleDateString('pt-BR')} | Ensaios: ${datas.length} | Componentes: ${componentes.length}
+              </div>
+              <div style="font-size:11px;color:#888;margin-top:4px;">
+                P = presente · A = ausente · — = ainda não cadastrado nessa data
+              </div>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="background:#005c33;color:#fff;padding:8px;">Nº</th>
+                  <th style="background:#005c33;color:#fff;padding:8px;">ID</th>
+                  <th style="background:#005c33;color:#fff;padding:8px;text-align:left;">Nome Completo</th>
+                  <th style="background:#005c33;color:#fff;padding:8px;">Ala</th>
+                  ${colunasData}
+                </tr>
+              </thead>
+              <tbody>${linhasHtml}</tbody>
+            </table>
+          </body>
+        </html>
+      `);
+      janela.document.close();
+    } catch (err) {
+      console.error('Erro ao gerar relatório de presenças por data:', err);
+      setMensagem({ texto: 'Falha ao gerar o relatório de presenças por data.', tipo: 'erro' });
       setTimeout(() => setMensagem({ texto: '', tipo: '' }), 4000);
     }
   };
@@ -421,6 +515,14 @@ function LancarPresencas() {
 
       <button onClick={gerarPdfFrequencia} style={{ width: '100%', marginTop: '12px', padding: '14px', backgroundColor: '#005c33', color: '#FFFFFF', border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '15px', cursor: 'pointer' }}>
         📄 Ver Relatório de Frequência por Ala
+      </button>
+
+      <button onClick={gerarRelatorioMatrizPresencas} style={{ width: '100%', marginTop: '12px', padding: '14px', backgroundColor: '#2563eb', color: '#FFFFFF', border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '15px', cursor: 'pointer' }}>
+        📊 Ver Relatório de Presenças por Data (Paisagem)
+      </button>
+
+      <button onClick={recalcularPresencas} disabled={recalculando} style={{ width: '100%', marginTop: '12px', padding: '14px', backgroundColor: '#64748b', color: '#FFFFFF', border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '15px', cursor: 'pointer' }}>
+        {recalculando ? 'Recalculando...' : '🔄 Corrigir Contagem (remover datas sem presença)'}
       </button>
     </div>
   );

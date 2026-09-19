@@ -138,7 +138,7 @@ app.get('/alas', async (req, res) => {
 // --- ROTA 3: Receber e salvar o Cadastro Completo ---
 app.post('/cadastro', upload.single('foto'), async (req, res) => {
   try {
-    const { id, tipoCadastro, nome, cpf, telefone, cep, rua, bairro, cidade, numero, complemento, ala, data } = req.body;
+    const { id, tipoCadastro, nome, cpf, telefone, cep, rua, bairro, cidade, numero, complemento, ala, data, dataNascimento } = req.body;
     const foto = req.file;
 
     if (!nome || !cpf) {
@@ -213,14 +213,15 @@ app.post('/cadastro', upload.single('foto'), async (req, res) => {
     // A coluna N (renovado) já entra como "Sim" ao salvar, igual ao efeito do
     // botão "Marcar Renovação" da tela de Pesquisa. A coluna O guarda a cidade
     // (preenchida via ViaCEP na tela de cadastro). A coluna P marca se a
-    // carteirinha já foi gerada — todo cadastro novo entra como "Não".
+    // carteirinha já foi gerada — todo cadastro novo entra como "Não". A coluna
+    // Q guarda a data de nascimento.
     const dadosParaSalvar = [
-      id, tipoCadastro, nome, cpf, telefone, cep, rua, bairro, numero, complemento, ala, data, fotoUrl, 'Sim', cidade || '', 'Não'
+      id, tipoCadastro, nome, cpf, telefone, cep, rua, bairro, numero, complemento, ala, data, fotoUrl, 'Sim', cidade || '', 'Não', dataNascimento || ''
     ];
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.SPREADSHEET_ID,
-      range: 'Inscricoes!A:P',
+      range: 'Inscricoes!A:Q',
       valueInputOption: 'USER_ENTERED',
       requestBody: {
         values: [dadosParaSalvar],
@@ -246,7 +247,7 @@ app.get('/buscar', async (req, res) => {
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.SPREADSHEET_ID,
-      range: 'Inscricoes!A:P', // N = renovado (Sim/Não), O = cidade, P = carteirinha gerada (Sim/Não)
+      range: 'Inscricoes!A:Q', // N = renovado (Sim/Não), O = cidade, P = carteirinha gerada (Sim/Não), Q = data de nascimento
     });
 
     const rows = response.data.values;
@@ -294,6 +295,7 @@ app.get('/buscar', async (req, res) => {
       renovado: row[13] || 'Não',
       cidade: row[14] || '',
       carteirinhaGerada: row[15] || 'Não',
+      dataNascimento: row[16] || '',
     }));
 
     res.json(dadosFormatados);
@@ -364,6 +366,11 @@ async function reconstruirMatrizesPorAla(ensaioAtual = null, opcoes = {}) {
     if (existente) ensaioAtual.ids.forEach(id => existente.ids.add(id));
     else presentesPorData.push({ label: ensaioAtual.label, ids: new Set(ensaioAtual.ids) });
   }
+
+  // Regra: uma data só conta como ensaio se tiver ao menos 1 presença
+  // registrada. Abas de data vazias (0 presentes) são descartadas aqui, o que
+  // as remove das matrizes por ala e dos resumos "Geral"/"Alas".
+  presentesPorData = presentesPorData.filter(p => p.ids.size > 0);
 
   if (presentesPorData.length === 0) return;
   presentesPorData.sort((x, y) => (parseDataFlex(x.label) || 0) - (parseDataFlex(y.label) || 0));
@@ -501,8 +508,14 @@ app.get('/dados-relatorio', async (req, res) => {
 
       const totalRenovados = renovadosPorId.size;
 
-      dadosPresencas = abasDeEnsaio.map((titulo, indice) => {
-        const idsPresentes = (respostaLote.data.valueRanges?.[indice]?.values || []).map(linha => linha[0]);
+      // Regra: só entra no relatório quem realmente teve presença registrada
+      // na data. Abas de ensaio vazias (0 presentes) são descartadas — não
+      // viram uma "data fantasma" com 100% de ausência nos gráficos.
+      const abasComPresenca = abasDeEnsaio
+        .map((titulo, indice) => ({ titulo, idsPresentes: (respostaLote.data.valueRanges?.[indice]?.values || []).map(linha => linha[0]) }))
+        .filter(a => a.idsPresentes.length > 0);
+
+      dadosPresencas = abasComPresenca.map(({ titulo, idsPresentes }) => {
         const presentesPorAla = {};
         let presentesRenovados = 0;
 
@@ -632,25 +645,18 @@ app.post('/marcar-presenca-individual', async (req, res) => {
 // --- ROTA 8: Grava Presenças e Ausências por Ala ---
 app.post('/registrar-ensaio-completo', async (req, res) => {
   try {
-    const { data, presentes, ausentes, listaNominal, estatisticasAlas } = req.body;
+    const { data, listaNominal } = req.body;
     if (!data) return res.status(400).json({ error: 'A data é obrigatória.' });
+
+    // Regra: só existe ensaio se houver ao menos 1 presença registrada. Uma
+    // chamada com 0 presentes não vira data/aba/estatística nenhuma — evita
+    // "datas fantasma" nos relatórios e nos gráficos.
+    if (!listaNominal || listaNominal.length === 0) {
+      return res.status(400).json({ error: 'Nenhum presente informado: a chamada não foi salva (ensaios sem presença não são contabilizados).' });
+    }
 
     const idArquivoPresencas = process.env.PRESENCAS_SPREADSHEET_ID;
     const nomeNovaAba = data.replaceAll('/', '-');
-
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: idArquivoPresencas, range: 'Geral!A:C', valueInputOption: 'USER_ENTERED',
-      resource: { values: [[data, presentes, ausentes]] },
-    });
-
-    // GRAVA AS ESTATÍSTICAS DETALHADAS POR ALA (Incluindo Ausentes)
-    if (estatisticasAlas && estatisticasAlas.length > 0) {
-      const linhasAlas = estatisticasAlas.map(est => [data, est.ala, est.presentes, est.ausentes]);
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: idArquivoPresencas, range: 'Alas!A:D', valueInputOption: 'USER_ENTERED',
-        resource: { values: linhasAlas },
-      });
-    }
 
     try {
       await sheets.spreadsheets.batchUpdate({
@@ -659,22 +665,17 @@ app.post('/registrar-ensaio-completo', async (req, res) => {
       });
     } catch (e) { }
 
-    if (listaNominal && listaNominal.length > 0) {
-      const linhasNominais = listaNominal.map(comp => [comp.id, comp.nome, comp.ala]);
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: idArquivoPresencas, range: `${nomeNovaAba}!A:C`, valueInputOption: 'USER_ENTERED',
-        resource: { values: [['ID do Componente', 'Nome do Componente', 'Ala'], ...linhasNominais] },
-      });
-    }
+    const linhasNominais = listaNominal.map(comp => [comp.id, comp.nome, comp.ala]);
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: idArquivoPresencas, range: `${nomeNovaAba}!A:C`, valueInputOption: 'USER_ENTERED',
+      resource: { values: [['ID do Componente', 'Nome do Componente', 'Ala'], ...linhasNominais] },
+    });
 
-    // Reconstrói as abas "Ala - X" (matriz nominal de presenças/ausências).
-    // Falha aqui não invalida o ensaio: os registros principais já foram gravados.
-    try {
-      const idsPresentes = new Set((listaNominal || []).map(comp => comp.id).filter(Boolean));
-      await reconstruirMatrizesPorAla({ label: data, ids: idsPresentes });
-    } catch (e) {
-      console.error('Falha ao reconstruir matrizes por ala:', e);
-    }
+    // Reconstrói as abas "Ala - X" e os resumos "Geral"/"Alas" a partir das
+    // abas de data reais (única fonte de verdade — evita registros duplicados
+    // ou divergentes entre a chamada manual e a matriz nominal).
+    const idsPresentes = new Set(listaNominal.map(comp => comp.id).filter(Boolean));
+    await reconstruirMatrizesPorAla({ label: data, ids: idsPresentes }, { reconstruirResumos: true });
 
     res.json({ success: true });
   } catch (error) {
@@ -994,7 +995,7 @@ app.get('/componentes-por-ala', async (req, res) => {
 app.put('/atualizar-cadastro/:id', upload.single('foto'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { tipoCadastro, nome, cpf, telefone, cep, rua, bairro, cidade, numero, complemento, ala, data } = req.body;
+    const { tipoCadastro, nome, cpf, telefone, cep, rua, bairro, cidade, numero, complemento, ala, data, dataNascimento } = req.body;
     const novaFoto = req.file;
 
     if (!nome || !cpf) {
@@ -1004,7 +1005,7 @@ app.put('/atualizar-cadastro/:id', upload.single('foto'), async (req, res) => {
     // 1. Localiza a linha do cadastro pelo ID (coluna A)
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.SPREADSHEET_ID,
-      range: 'Inscricoes!A:P',
+      range: 'Inscricoes!A:Q',
     });
 
     const linhas = response.data.values || [];
@@ -1017,6 +1018,7 @@ app.put('/atualizar-cadastro/:id', upload.single('foto'), async (req, res) => {
     let fotoUrl = linhas[indiceLinha][12] || '';
     const renovado = linhas[indiceLinha][13] || 'Não'; // Edição não mexe na renovação
     const carteirinhaGerada = linhas[indiceLinha][15] || 'Não'; // Edição não mexe no status da carteirinha
+    const dataNascimentoFinal = dataNascimento !== undefined ? dataNascimento : (linhas[indiceLinha][16] || '');
 
     // 2. Se uma nova foto foi enviada, sobe pro Drive via o mesmo Web App do cadastro
     if (novaFoto) {
@@ -1042,10 +1044,10 @@ app.put('/atualizar-cadastro/:id', upload.single('foto'), async (req, res) => {
     const linhaPlanilha = indiceLinha + 1; // Sheets é 1-indexado
     await sheets.spreadsheets.values.update({
       spreadsheetId: process.env.SPREADSHEET_ID,
-      range: `Inscricoes!A${linhaPlanilha}:P${linhaPlanilha}`,
+      range: `Inscricoes!A${linhaPlanilha}:Q${linhaPlanilha}`,
       valueInputOption: 'USER_ENTERED',
       requestBody: {
-        values: [[id, tipoCadastro, nome, cpf, telefone, cep, rua, bairro, numero, complemento, ala, data, fotoUrl, renovado, cidade || '', carteirinhaGerada]],
+        values: [[id, tipoCadastro, nome, cpf, telefone, cep, rua, bairro, numero, complemento, ala, data, fotoUrl, renovado, cidade || '', carteirinhaGerada, dataNascimentoFinal]],
       },
     });
 
@@ -1127,6 +1129,9 @@ app.get('/frequencia/:id', async (req, res) => {
     let ausencias = 0;
     abasDeEnsaio.forEach((titulo, indice) => {
       const idsPresentes = (respostaLote.data.valueRanges?.[indice]?.values || []).map(linha => linha[0]);
+      // Aba de data sem nenhuma presença registrada não é um ensaio válido —
+      // não deve contar nem como presença, nem como ausência.
+      if (idsPresentes.length === 0) return;
       if (idsPresentes.includes(id)) {
         presencas += 1;
       } else {
@@ -1158,17 +1163,23 @@ app.get('/frequencia-geral', async (req, res) => {
 
     const titulos = (planilhaInfo.data.sheets || []).map(aba => aba.properties.title);
     const abasAla = titulos.filter(t => t.startsWith('Ala - '));
-    const totalEnsaios = titulos.filter(ehAbaDeEnsaio).length;
 
     const componentes = [];
+    let totalEnsaios = 0;
     if (abasAla.length > 0) {
+      // Inclui o cabeçalho (linha 1) para saber quantas colunas de data
+      // existem de fato — a mesma fonte de verdade usada para montar as
+      // matrizes, já livre de datas sem nenhuma presença registrada.
       const respostaLote = await sheets.spreadsheets.values.batchGet({
         spreadsheetId: idArquivoPresencas,
-        ranges: abasAla.map(t => `${t}!A2:ZZZ`),
+        ranges: abasAla.map(t => `${t}!A1:ZZZ`),
       });
       (respostaLote.data.valueRanges || []).forEach((intervalo, indice) => {
         const ala = abasAla[indice].replace(/^Ala - /, '');
-        (intervalo.values || []).forEach(row => {
+        const linhas = intervalo.values || [];
+        if (linhas.length === 0) return;
+        totalEnsaios = Math.max(totalEnsaios, linhas[0].slice(2).length);
+        linhas.slice(1).forEach(row => {
           const id = row[0];
           if (!id) return;
           const marcas = row.slice(2);
@@ -1188,6 +1199,69 @@ app.get('/frequencia-geral', async (req, res) => {
   } catch (error) {
     console.error('Erro ao calcular frequência geral:', error);
     res.status(500).json({ error: 'Erro interno ao calcular frequência geral.' });
+  }
+});
+
+// --- ROTA 17: Matriz de Presenças (datas em colunas) ---
+// Lê as abas "Ala - X" (já organizadas como ID/Nome + uma coluna por data com
+// P/A/vazio) e devolve tudo consolidado, pronto para montar uma tabela única
+// com uma coluna por data de ensaio.
+app.get('/matriz-presencas', async (req, res) => {
+  try {
+    const idArquivoPresencas = process.env.PRESENCAS_SPREADSHEET_ID;
+
+    const planilhaInfo = await sheets.spreadsheets.get({ spreadsheetId: idArquivoPresencas });
+    const titulos = (planilhaInfo.data.sheets || []).map(aba => aba.properties.title);
+    const abasAla = titulos.filter(t => t.startsWith('Ala - '));
+
+    if (abasAla.length === 0) return res.json({ datas: [], componentes: [] });
+
+    const respostaLote = await sheets.spreadsheets.values.batchGet({
+      spreadsheetId: idArquivoPresencas,
+      ranges: abasAla.map(t => `${t}!A1:ZZZ`),
+    });
+
+    let datas = [];
+    const componentes = [];
+
+    (respostaLote.data.valueRanges || []).forEach((intervalo, indice) => {
+      const ala = abasAla[indice].replace(/^Ala - /, '');
+      const linhas = intervalo.values || [];
+      if (linhas.length === 0) return;
+
+      const cabecalho = linhas[0];
+      const datasDaAba = cabecalho.slice(2);
+      if (datasDaAba.length > datas.length) datas = datasDaAba;
+
+      linhas.slice(1).forEach(row => {
+        const id = row[0];
+        if (!id) return;
+        const marcas = {};
+        datasDaAba.forEach((data, i) => { marcas[data] = row[2 + i] || ''; });
+        componentes.push({ id, nome: row[1] || '', ala, marcas });
+      });
+    });
+
+    componentes.sort((a, b) => a.ala.localeCompare(b.ala) || a.nome.localeCompare(b.nome));
+
+    res.json({ datas, componentes });
+  } catch (error) {
+    console.error('Erro ao montar matriz de presenças:', error);
+    res.status(500).json({ error: 'Erro interno ao montar a matriz de presenças.' });
+  }
+});
+
+// --- ROTA 18: Recalcula os resumos de presença (Geral/Alas/Ala-X) do zero ---
+// Reprocessa tudo a partir das abas de data reais, aplicando a regra de que só
+// contam ensaios com ao menos 1 presença registrada. Usada para corrigir de
+// imediato contagens antigas que incluíam datas "fantasma" (0 presentes).
+app.post('/recalcular-presencas', async (req, res) => {
+  try {
+    await reconstruirMatrizesPorAla(null, { reconstruirResumos: true });
+    res.json({ success: true, message: 'Resumos de presença recalculados com sucesso.' });
+  } catch (error) {
+    console.error('Erro ao recalcular presenças:', error);
+    res.status(500).json({ error: 'Erro interno ao recalcular os resumos de presença.' });
   }
 });
 

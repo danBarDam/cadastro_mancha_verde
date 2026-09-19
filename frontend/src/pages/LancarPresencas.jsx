@@ -277,13 +277,24 @@ function LancarPresencas() {
         return;
       }
 
+      // Reaproveita o mesmo filtro de ala usado nas listas acima na tela.
+      const componentesFiltrados = alaFiltroVisuais === 'TODAS'
+        ? componentes
+        : componentes.filter(c => c.ala === alaFiltroVisuais);
+
+      if (componentesFiltrados.length === 0) {
+        setMensagem({ texto: `Nenhum componente encontrado para a ala "${alaFiltroVisuais}".`, tipo: 'erro' });
+        setTimeout(() => setMensagem({ texto: '', tipo: '' }), 4000);
+        return;
+      }
+
       const celula = (marca) => {
         if (marca === 'P') return '<td style="padding:4px;text-align:center;background:#e8f5e9;color:#005c33;font-weight:bold;border:1px solid #cbd5e1;">P</td>';
         if (marca === 'A') return '<td style="padding:4px;text-align:center;background:#fdeaea;color:#ef4444;font-weight:bold;border:1px solid #cbd5e1;">A</td>';
         return '<td style="padding:4px;text-align:center;color:#cbd5e1;border:1px solid #cbd5e1;">—</td>';
       };
 
-      const linhasHtml = componentes.map((c, i) => `
+      const linhasHtml = componentesFiltrados.map((c, i) => `
         <tr>
           <td style="padding:4px;text-align:center;border:1px solid #cbd5e1;color:#000;">${i + 1}</td>
           <td style="padding:4px;border:1px solid #cbd5e1;color:#000;word-break:break-word;">#${c.id}</td>
@@ -342,9 +353,9 @@ function LancarPresencas() {
             </div>
             <div class="header">
               <h1 class="title">G.R.C.E.S. Mancha Verde</h1>
-              <h2>Relatório de Presenças e Ausências por Data</h2>
+              <h2>Relatório de Presenças e Ausências por Data ${alaFiltroVisuais !== 'TODAS' ? `— Ala: ${alaFiltroVisuais.toUpperCase()}` : ''}</h2>
               <div style="font-size:12px;color:#666;">
-                Emitido em: ${new Date().toLocaleDateString('pt-BR')} | Ensaios: ${datas.length} | Componentes: ${componentes.length}
+                Emitido em: ${new Date().toLocaleDateString('pt-BR')} | Ensaios: ${datas.length} | Componentes: ${componentesFiltrados.length}
               </div>
               <div style="font-size:11px;color:#888;margin-top:4px;">
                 P = presente · A = ausente · — = ainda não cadastrado nessa data ·
@@ -570,7 +581,15 @@ function LancarPresencas() {
         📄 Ver Relatório de Frequência por Ala
       </button>
 
-      <button onClick={gerarRelatorioMatrizPresencas} style={{ width: '100%', marginTop: '12px', padding: '14px', backgroundColor: '#2563eb', color: '#FFFFFF', border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '15px', cursor: 'pointer' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '12px', fontSize: '13px', color: '#000000' }}>
+        <label style={{ fontWeight: 'bold' }}>Filtrar relatório por Ala:</label>
+        <select value={alaFiltroVisuais} onChange={(e) => setAlaFiltroVisuais(e.target.value)} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e1', color: '#000000', backgroundColor: '#FFFFFF', fontWeight: 'bold', fontSize: '13px' }}>
+          <option value="TODAS">Todas as Alas</option>
+          {listaAlas.map(ala => <option key={ala} value={ala}>{ala.toUpperCase()}</option>)}
+        </select>
+      </div>
+
+      <button onClick={gerarRelatorioMatrizPresencas} style={{ width: '100%', marginTop: '8px', padding: '14px', backgroundColor: '#2563eb', color: '#FFFFFF', border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '15px', cursor: 'pointer' }}>
         📊 Ver Relatório de Presenças por Data (Paisagem)
       </button>
 

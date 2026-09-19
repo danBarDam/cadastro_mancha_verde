@@ -300,41 +300,39 @@ function Cadastro() {
             />
         </div>
 
-        <div className="form-group" style={{ flex: '1 1 160px' }}>
+        <div className="form-group" style={{ flex: '1 1 200px' }}>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#1e293b' }}>
             Data de Nascimento:
             </label>
-            <input
-            type="date"
-            className="form-input"
-            value={dataNascimento}
-            onChange={(e) => setDataNascimento(e.target.value)}
-            style={{
-                width: '100%',
-                padding: '12px',
-                borderRadius: '6px',
-                border: '1px solid #cbd5e1',
-                boxSizing: 'border-box'
-            }}
-            required
-            />
-        </div>
-
-        <div className="form-group" style={{ flex: '1 1 100px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#1e293b' }}>
-            Idade:
-            </label>
-            <div style={{
-                padding: '12px',
-                borderRadius: '6px',
-                border: '1px solid #cbd5e1',
-                backgroundColor: '#f1f5f9',
-                color: '#1e293b',
-                fontWeight: 'bold',
-                boxSizing: 'border-box',
-                textAlign: 'center'
-            }}>
-                {calcularIdade(dataNascimento) !== null ? `${calcularIdade(dataNascimento)} anos` : '—'}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                type="date"
+                className="form-input"
+                value={dataNascimento}
+                onChange={(e) => setDataNascimento(e.target.value)}
+                style={{
+                    flex: 1,
+                    minWidth: 0,
+                    padding: '12px',
+                    borderRadius: '6px',
+                    border: '1px solid #cbd5e1',
+                    boxSizing: 'border-box'
+                }}
+                required
+                />
+                <span style={{
+                    flexShrink: 0,
+                    padding: '4px 8px',
+                    borderRadius: '12px',
+                    border: '1px solid #cbd5e1',
+                    backgroundColor: '#f1f5f9',
+                    color: '#1e293b',
+                    fontWeight: 'bold',
+                    fontSize: '12px',
+                    whiteSpace: 'nowrap'
+                }}>
+                    {calcularIdade(dataNascimento) !== null ? `${calcularIdade(dataNascimento)} anos` : '—'}
+                </span>
             </div>
         </div>
 

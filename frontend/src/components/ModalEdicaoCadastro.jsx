@@ -220,20 +220,29 @@ function ModalEdicaoCadastro({ componente, aoFechar, aoSalvar }) {
             />
           </label>
 
-          <label style={{ ...labelEdicaoStyle, flex: '1 1 160px' }}>
+          <label style={{ ...labelEdicaoStyle, flex: '1 1 200px' }}>
             Data de Nascimento:
-            <input
-              type="date"
-              value={formEdicao.dataNascimento || ''}
-              onChange={(e) => handleCampoEdicao('dataNascimento', e.target.value)}
-              style={inputEdicaoStyle}
-            />
-          </label>
-
-          <label style={{ ...labelEdicaoStyle, flex: '1 1 100px' }}>
-            Idade:
-            <div style={{ ...inputEdicaoStyle, textAlign: 'center', fontWeight: 'bold' }}>
-              {calcularIdade(formEdicao.dataNascimento) !== null ? `${calcularIdade(formEdicao.dataNascimento)} anos` : '—'}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <input
+                type="date"
+                value={formEdicao.dataNascimento || ''}
+                onChange={(e) => handleCampoEdicao('dataNascimento', e.target.value)}
+                style={{ ...inputEdicaoStyle, flex: 1, minWidth: 0 }}
+              />
+              <span style={{
+                flexShrink: 0,
+                marginTop: '5px',
+                padding: '4px 8px',
+                borderRadius: '12px',
+                border: '1px solid #cbd5e1',
+                backgroundColor: '#f8fafc',
+                color: '#1e293b',
+                fontWeight: 'bold',
+                fontSize: '12px',
+                whiteSpace: 'nowrap'
+              }}>
+                {calcularIdade(formEdicao.dataNascimento) !== null ? `${calcularIdade(formEdicao.dataNascimento)} anos` : '—'}
+              </span>
             </div>
           </label>
         </div>

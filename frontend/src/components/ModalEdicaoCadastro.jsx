@@ -3,6 +3,7 @@ import axios from 'axios';
 import Webcam from 'react-webcam';
 import api from '../utils/api';
 import { converterLinkDrive, dataURLParaArquivo } from '../utils/imagem';
+import { calcularIdade } from '../utils/idade';
 
 // Cores mais claras para os campos de texto da área de edição
 const inputEdicaoStyle = {
@@ -49,6 +50,7 @@ function ModalEdicaoCadastro({ componente, aoFechar, aoSalvar }) {
       nome: componente.nome || '',
       cpf: componente.cpf || '',
       telefone: componente.telefone || '',
+      dataNascimento: componente.dataNascimento || '',
       cep: componente.cep || '',
       rua: componente.rua || '',
       bairro: componente.bairro || '',
@@ -126,6 +128,7 @@ function ModalEdicaoCadastro({ componente, aoFechar, aoSalvar }) {
       formData.append('nome', formEdicao.nome);
       formData.append('cpf', formEdicao.cpf);
       formData.append('telefone', formEdicao.telefone);
+      formData.append('dataNascimento', formEdicao.dataNascimento || '');
       formData.append('cep', formEdicao.cep);
       formData.append('rua', formEdicao.rua);
       formData.append('bairro', formEdicao.bairro);
@@ -215,6 +218,23 @@ function ModalEdicaoCadastro({ componente, aoFechar, aoSalvar }) {
               onChange={(e) => handleCampoEdicao('telefone', e.target.value)}
               style={inputEdicaoStyle}
             />
+          </label>
+
+          <label style={{ ...labelEdicaoStyle, flex: '1 1 160px' }}>
+            Data de Nascimento:
+            <input
+              type="date"
+              value={formEdicao.dataNascimento || ''}
+              onChange={(e) => handleCampoEdicao('dataNascimento', e.target.value)}
+              style={inputEdicaoStyle}
+            />
+          </label>
+
+          <label style={{ ...labelEdicaoStyle, flex: '1 1 100px' }}>
+            Idade:
+            <div style={{ ...inputEdicaoStyle, textAlign: 'center', fontWeight: 'bold' }}>
+              {calcularIdade(formEdicao.dataNascimento) !== null ? `${calcularIdade(formEdicao.dataNascimento)} anos` : '—'}
+            </div>
           </label>
         </div>
 

@@ -5,6 +5,7 @@ import api from '../utils/api';
 import '../App.css'; //Importando o CSS que acabamos de criar
 import { dataURLParaArquivo } from '../utils/imagem';
 import { gerarImagemCarteirinha } from '../utils/carteirinha';
+import { calcularIdade } from '../utils/idade';
 
 function Cadastro() {
   const [id, setId] = useState('');
@@ -23,6 +24,7 @@ function Cadastro() {
   const [fotoSrc, setFotoSrc] = useState(null);
   const [cameraAtiva, setCameraAtiva] = useState(false);
   const [telefone, setTelefone] = useState('');
+  const [dataNascimento, setDataNascimento] = useState('');
   
   const [alasLista, setAlasLista] = useState([]);
   const [status, setStatus] = useState('');
@@ -118,6 +120,7 @@ function Cadastro() {
       formData.append('nome', nome);
       formData.append('cpf', cpf);
       formData.append('telefone', telefone);
+      formData.append('dataNascimento', dataNascimento);
       formData.append('cep', cep);
       formData.append('rua', rua);
       formData.append('bairro', bairro);
@@ -143,7 +146,7 @@ function Cadastro() {
 
       // Limpa os campos
       setNome(''); setCpf(''); setCep(''); setRua(''); setBairro(''); setCidade('');
-      setNumero(''); setComplemento(''); setAla(''); setFotoSrc(null);
+      setNumero(''); setComplemento(''); setAla(''); setFotoSrc(null); setDataNascimento('');
 
       // Se for cadastro novo, atualiza o ID automático para o próximo
       if (tipoCadastro === 'Novo') {
@@ -295,6 +298,44 @@ function Cadastro() {
             }}
             required
             />
+        </div>
+
+        <div className="form-group" style={{ flex: '1 1 160px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#1e293b' }}>
+            Data de Nascimento:
+            </label>
+            <input
+            type="date"
+            className="form-input"
+            value={dataNascimento}
+            onChange={(e) => setDataNascimento(e.target.value)}
+            style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '6px',
+                border: '1px solid #cbd5e1',
+                boxSizing: 'border-box'
+            }}
+            required
+            />
+        </div>
+
+        <div className="form-group" style={{ flex: '1 1 100px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#1e293b' }}>
+            Idade:
+            </label>
+            <div style={{
+                padding: '12px',
+                borderRadius: '6px',
+                border: '1px solid #cbd5e1',
+                backgroundColor: '#f1f5f9',
+                color: '#1e293b',
+                fontWeight: 'bold',
+                boxSizing: 'border-box',
+                textAlign: 'center'
+            }}>
+                {calcularIdade(dataNascimento) !== null ? `${calcularIdade(dataNascimento)} anos` : '—'}
+            </div>
         </div>
 
         </div>

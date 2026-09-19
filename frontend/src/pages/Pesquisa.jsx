@@ -3,6 +3,7 @@ import api from '../utils/api';
 import { converterLinkDrive } from '../utils/imagem';
 import ModalEdicaoCadastro from '../components/ModalEdicaoCadastro';
 import IndicadorCarteirinha from '../components/IndicadorCarteirinha';
+import { calcularIdade } from '../utils/idade';
 
 function Pesquisa() {
   const [termoBusca, setTermoBusca] = useState('');
@@ -155,6 +156,12 @@ function Pesquisa() {
               <p style={{ margin: '0 0 5px 0', fontSize: '14px', color: '#64748b' }}>
                 <strong>CPF:</strong> {componente.cpf} | <strong>WhatsApp:</strong> {componente.telefone || 'Não informado'}
               </p>
+              {componente.dataNascimento && (
+                <p style={{ margin: '0 0 5px 0', fontSize: '14px', color: '#64748b' }}>
+                  <strong>Nascimento:</strong> {componente.dataNascimento.split('-').reverse().join('/')}
+                  {calcularIdade(componente.dataNascimento) !== null && ` (${calcularIdade(componente.dataNascimento)} anos)`}
+                </p>
+              )}
               <p style={{ margin: '0 0 5px 0', fontSize: '14px', color: '#64748b' }}>
                 <strong>Inscrição:</strong> #{componente.id}
               </p>

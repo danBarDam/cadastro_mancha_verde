@@ -125,6 +125,17 @@ function Relatorios() {
     fatiasPizzaQuadra = montarFatiasAlas(6, PALETA_CATEGORICA);
   }
 
+  // Texto branco ou escuro sobre a cor da fatia, pela luminância do hex (nunca eyeballed)
+  const precisaTextoEscuro = (hex) => {
+    const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6;
+  };
+
+  const polarParaCartesiano = (cx, cy, r, anguloGraus) => {
+    const anguloRad = ((anguloGraus - 90) * Math.PI) / 180;
+    return { x: cx + r * Math.cos(anguloRad), y: cy + r * Math.sin(anguloRad) };
+  };
+
   const totalPizzaQuadra = fatiasPizzaQuadra.reduce((acc, f) => acc + f.valor, 0);
   let anguloAcumuladoQuadra = 0;
   const fatiasComAnguloQuadra = fatiasPizzaQuadra.map((f, indice) => {
@@ -132,13 +143,15 @@ function Relatorios() {
     const anguloInicio = anguloAcumuladoQuadra;
     const anguloFim = anguloInicio + (pct / 100) * 360;
     anguloAcumuladoQuadra = anguloFim;
-    return { ...f, pct, anguloInicio, anguloFim, indice };
+    const anguloMeio = (anguloInicio + anguloFim) / 2;
+    const anguloMeioRad = ((anguloMeio - 90) * Math.PI) / 180;
+    // Direção do "pop-out" no hover (afasta a fatia do centro ao longo do seu próprio raio)
+    const deslocX = Math.cos(anguloMeioRad) * 9;
+    const deslocY = Math.sin(anguloMeioRad) * 9;
+    // Ponto do rótulo direto (só usado em fatias largas o bastante p/ caber o texto)
+    const pontoRotulo = polarParaCartesiano(130, 130, 97, anguloMeio);
+    return { ...f, pct, anguloInicio, anguloFim, indice, deslocX, deslocY, pontoRotulo, textoEscuro: precisaTextoEscuro(f.cor) };
   });
-
-  const polarParaCartesiano = (cx, cy, r, anguloGraus) => {
-    const anguloRad = ((anguloGraus - 90) * Math.PI) / 180;
-    return { x: cx + r * Math.cos(anguloRad), y: cy + r * Math.sin(anguloRad) };
-  };
 
   const descreverFatiaDonut = (cx, cy, rExterno, rInterno, anguloInicio, anguloFim) => {
     // Clampa fatias que fecham o círculo inteiro (1 categoria = 100%) — um sweep
@@ -421,43 +434,75 @@ function Relatorios() {
             Nenhum registro nesta categoria para o último ensaio.
           </div>
         ) : (
-          <div style={{ display: 'flex', gap: '30px', flexWrap: 'wrap', alignItems: 'center' }}>
-            <svg width="260" height="260" viewBox="0 0 260 260" style={{ flexShrink: 0 }}>
-              {fatiasComAnguloQuadra.map((f) => (
-                <path
-                  key={f.label}
-                  d={descreverFatiaDonut(130, 130, 120, 66, f.anguloInicio, f.anguloFim)}
-                  fill={f.cor}
-                  stroke="#FFFFFF"
-                  strokeWidth="2"
-                  opacity={fatiaEmFoco === null || fatiaEmFoco === f.indice ? 1 : 0.35}
-                  style={{ cursor: 'pointer', transition: 'opacity 0.15s ease' }}
-                  onMouseEnter={() => setFatiaEmFoco(f.indice)}
-                  onMouseLeave={() => setFatiaEmFoco(null)}
+          <div style={{ display: 'flex', gap: '35px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <svg width="270" height="270" viewBox="0 0 260 260" style={{ flexShrink: 0, overflow: 'visible' }}>
+              {fatiasComAnguloQuadra.map((f) => {
+                const emFoco = fatiaEmFoco === f.indice;
+                return (
+                  <path
+                    key={f.label}
+                    d={descreverFatiaDonut(130, 130, 118, 74, f.anguloInicio, f.anguloFim)}
+                    fill={f.cor}
+                    stroke="#FFFFFF"
+                    strokeWidth="2"
+                    opacity={fatiaEmFoco === null || emFoco ? 1 : 0.4}
+                    transform={emFoco ? `translate(${f.deslocX}, ${f.deslocY})` : undefined}
+                    style={{
+                      cursor: 'pointer',
+                      transition: 'opacity 0.15s ease, transform 0.15s ease, filter 0.15s ease',
+                      filter: emFoco ? 'drop-shadow(0 6px 10px rgba(0,0,0,0.25))' : 'none',
+                    }}
+                    onMouseEnter={() => setFatiaEmFoco(f.indice)}
+                    onMouseLeave={() => setFatiaEmFoco(null)}
+                  >
+                    <title>{`${f.label}: ${f.valor} (${f.pct.toFixed(1)}%)`}</title>
+                  </path>
+                );
+              })}
+              {/* Rótulo direto só nas fatias largas o bastante p/ caber o texto sem espremer */}
+              {fatiasComAnguloQuadra.filter(f => f.pct >= 9).map((f) => (
+                <text
+                  key={`rotulo-${f.label}`}
+                  x={f.pontoRotulo.x}
+                  y={f.pontoRotulo.y}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  fontSize="13"
+                  fontWeight="bold"
+                  fill={f.textoEscuro ? '#0b0b0b' : '#FFFFFF'}
+                  style={{ pointerEvents: 'none' }}
                 >
-                  <title>{`${f.label}: ${f.valor} (${f.pct.toFixed(1)}%)`}</title>
-                </path>
+                  {`${f.pct.toFixed(0)}%`}
+                </text>
               ))}
-              <text x="130" y="122" textAnchor="middle" fontSize="30" fontWeight="bold" fill="#000000">
+              <circle cx="130" cy="130" r="74" fill="#FFFFFF" />
+              <text x="130" y="122" textAnchor="middle" fontSize="32" fontWeight="bold" fill="#000000">
                 {fatiaEmFoco !== null ? fatiasComAnguloQuadra[fatiaEmFoco].valor : totalPizzaQuadra}
               </text>
-              <text x="130" y="144" textAnchor="middle" fontSize="11" fontWeight="bold" fill="#64748b">
-                {(fatiaEmFoco !== null ? fatiasComAnguloQuadra[fatiaEmFoco].label : 'NA QUADRA').toUpperCase()}
+              <text x="130" y="145" textAnchor="middle" fontSize="11" fontWeight="bold" fill="#64748b" style={{ textTransform: 'uppercase' }}>
+                {(fatiaEmFoco !== null ? fatiasComAnguloQuadra[fatiaEmFoco].label : 'Na quadra').length > 22
+                  ? 'NA QUADRA'
+                  : (fatiaEmFoco !== null ? fatiasComAnguloQuadra[fatiaEmFoco].label : 'Na quadra').toUpperCase()}
               </text>
             </svg>
 
-            <div style={{ flex: 1, minWidth: '260px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ flex: 1, minWidth: '260px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '6px 16px', alignContent: 'start' }}>
               {fatiasComAnguloQuadra.map((f) => (
                 <div
                   key={f.label}
                   onMouseEnter={() => setFatiaEmFoco(f.indice)}
                   onMouseLeave={() => setFatiaEmFoco(null)}
-                  style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '6px 8px', borderRadius: '4px', backgroundColor: fatiaEmFoco === f.indice ? '#f1f5f9' : 'transparent' }}
+                  style={{
+                    display: 'flex', flexDirection: 'column', gap: '2px', padding: '7px 10px', borderRadius: '6px',
+                    backgroundColor: fatiaEmFoco === f.indice ? '#f1f5f9' : 'transparent',
+                    borderLeft: `3px solid ${fatiaEmFoco === f.indice ? f.cor : 'transparent'}`,
+                    transition: 'background-color 0.15s ease, border-color 0.15s ease',
+                  }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px' }}>
                     <span style={{ width: '12px', height: '12px', borderRadius: '3px', backgroundColor: f.cor, flexShrink: 0 }}></span>
                     <span style={{ fontWeight: 'bold', color: '#000000', flex: 1 }}>{f.label}</span>
-                    <span style={{ fontWeight: 'bold', color: '#000000' }}>{f.valor} ({f.pct.toFixed(1)}%)</span>
+                    <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap' }}>{f.valor} ({f.pct.toFixed(1)}%)</span>
                   </div>
                   {f.detalhe && <div style={{ marginLeft: '22px', color: '#64748b', fontSize: '12px' }}>{f.detalhe}</div>}
                 </div>

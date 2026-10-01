@@ -327,9 +327,11 @@ const parseDataFlex = (str) => {
 };
 
 // As abas de ensaio da planilha de presenças são as nomeadas pela data.
-// "Geral" e "Alas" são de controle; "Ala - X" é a matriz nominal derivada.
+// "Geral" e "Alas" são de controle; "Ala - X" é a matriz nominal derivada;
+// "TiposEnsaio" é uma aba legada (o tipo agora fica em D1/D2 de cada aba de
+// ensaio) — mantida na exclusão caso ainda exista em planilhas antigas.
 const ehAbaDeEnsaio = (titulo) =>
-  titulo !== 'Geral' && titulo !== 'Alas' && !titulo.startsWith('Ala - ');
+  titulo !== 'Geral' && titulo !== 'Alas' && titulo !== 'TiposEnsaio' && !titulo.startsWith('Ala - ');
 
 // Reconstrói as abas "Ala - <ala>" (matriz ID x data, células P / A / vazio) a
 // partir das abas de ensaio (verdade sobre quem esteve presente) e do cadastro
@@ -456,39 +458,18 @@ async function reconstruirMatrizesPorAla(ensaioAtual = null, opcoes = {}) {
   }
 }
 
-// Grava (ou atualiza) o tipo de um ensaio ("Comum" ou "Especial") na aba
-// "TiposEnsaio" (Data | Tipo) da planilha de presenças. Cria a aba na primeira
-// vez que for usada. Falha aqui não deve invalidar o registro do ensaio.
-async function salvarTipoEnsaio(dataLabel, tipo) {
+// Grava o tipo de um ensaio ("Comum" ou "Especial") na própria aba da data
+// (células D1/D2), junto da lista nominal — a aba de cada ensaio já é a fonte
+// de verdade sobre ele, então o tipo fica junto em vez de numa aba à parte
+// casada por string de data. Falha aqui não deve invalidar o registro do ensaio.
+async function salvarTipoEnsaioNaAba(nomeAba, tipo) {
   const idPresencas = process.env.PRESENCAS_SPREADSHEET_ID;
   const tipoValido = tipo === 'Especial' ? 'Especial' : 'Comum';
 
-  try {
-    await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: idPresencas,
-      requestBody: { requests: [{ addSheet: { properties: { title: 'TiposEnsaio' } } }] },
-    });
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: idPresencas, range: 'TiposEnsaio!A1', valueInputOption: 'RAW',
-      requestBody: { values: [['Data', 'Tipo']] },
-    });
-  } catch (e) { /* aba já existe */ }
-
-  const resposta = await sheets.spreadsheets.values.get({ spreadsheetId: idPresencas, range: 'TiposEnsaio!A:B' });
-  const linhas = resposta.data.values || [];
-  const indiceLinha = linhas.findIndex((linha, i) => i > 0 && linha[0] === dataLabel);
-
-  if (indiceLinha !== -1) {
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: idPresencas, range: `TiposEnsaio!B${indiceLinha + 1}`, valueInputOption: 'RAW',
-      requestBody: { values: [[tipoValido]] },
-    });
-  } else {
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: idPresencas, range: 'TiposEnsaio!A:B', valueInputOption: 'RAW',
-      requestBody: { values: [[dataLabel, tipoValido]] },
-    });
-  }
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: idPresencas, range: `${nomeAba}!D1:D2`, valueInputOption: 'RAW',
+    requestBody: { values: [['Tipo de Ensaio'], [tipoValido]] },
+  });
 }
 
 // --- ROTA 5: Busca Dados Cadastrais e Histórico ---
@@ -714,7 +695,7 @@ app.post('/registrar-ensaio-completo', async (req, res) => {
 
     // Falha aqui não invalida o ensaio: presenças e matrizes já foram salvas.
     try {
-      await salvarTipoEnsaio(data, tipoEnsaio);
+      await salvarTipoEnsaioNaAba(nomeNovaAba, tipoEnsaio);
     } catch (e) {
       console.error('Falha ao salvar o tipo do ensaio:', e);
     }
@@ -805,7 +786,7 @@ app.post('/importar-presencas', async (req, res) => {
 
     // Falha aqui não invalida a importação: presenças e matrizes já foram salvas.
     try {
-      await salvarTipoEnsaio(dataLabel, tipoEnsaio);
+      await salvarTipoEnsaioNaAba(nomeAba, tipoEnsaio);
     } catch (e) {
       console.error('Falha ao salvar o tipo do ensaio:', e);
     }
@@ -1214,11 +1195,11 @@ app.get('/frequencia-geral', async (req, res) => {
     const abasAla = titulos.filter(t => t.startsWith('Ala - '));
 
     const componentes = [];
-    let totalEnsaios = 0;
+    let datas = [];
     if (abasAla.length > 0) {
-      // Inclui o cabeçalho (linha 1) para saber quantas colunas de data
-      // existem de fato — a mesma fonte de verdade usada para montar as
-      // matrizes, já livre de datas sem nenhuma presença registrada.
+      // Inclui o cabeçalho (linha 1) para saber quais datas existem de fato —
+      // a mesma fonte de verdade usada para montar as matrizes, já livre de
+      // datas sem nenhuma presença registrada.
       const respostaLote = await sheets.spreadsheets.values.batchGet({
         spreadsheetId: idArquivoPresencas,
         ranges: abasAla.map(t => `${t}!A1:ZZZ`),
@@ -1227,7 +1208,8 @@ app.get('/frequencia-geral', async (req, res) => {
         const ala = abasAla[indice].replace(/^Ala - /, '');
         const linhas = intervalo.values || [];
         if (linhas.length === 0) return;
-        totalEnsaios = Math.max(totalEnsaios, linhas[0].slice(2).length);
+        const datasDaAba = linhas[0].slice(2);
+        if (datasDaAba.length > datas.length) datas = datasDaAba;
         linhas.slice(1).forEach(row => {
           const id = row[0];
           if (!id) return;
@@ -1244,7 +1226,22 @@ app.get('/frequencia-geral', async (req, res) => {
       });
     }
 
-    res.json({ totalEnsaios, componentes });
+    // Tipo ("Comum"/"Especial") de cada ensaio, lido da célula D2 da própria
+    // aba da data. Sem marcação (ou se a leitura falhar), conta como "Comum".
+    let totalEnsaiosComuns = 0;
+    let totalEnsaiosEspeciais = 0;
+    if (datas.length > 0) {
+      const respostaTipos = await sheets.spreadsheets.values.batchGet({
+        spreadsheetId: idArquivoPresencas,
+        ranges: datas.map(d => `${d.replaceAll('/', '-')}!D2`),
+      }).catch(() => ({ data: { valueRanges: [] } }));
+      datas.forEach((_, i) => {
+        const valor = respostaTipos.data.valueRanges?.[i]?.values?.[0]?.[0];
+        if (valor === 'Especial') totalEnsaiosEspeciais++; else totalEnsaiosComuns++;
+      });
+    }
+
+    res.json({ totalEnsaios: datas.length, totalEnsaiosComuns, totalEnsaiosEspeciais, componentes });
   } catch (error) {
     console.error('Erro ao calcular frequência geral:', error);
     res.status(500).json({ error: 'Erro interno ao calcular frequência geral.' });
@@ -1265,18 +1262,9 @@ app.get('/matriz-presencas', async (req, res) => {
 
     if (abasAla.length === 0) return res.json({ datas: [], componentes: [], tipos: {} });
 
-    const [respostaLote, respostaTipos] = await Promise.all([
-      sheets.spreadsheets.values.batchGet({
-        spreadsheetId: idArquivoPresencas,
-        ranges: abasAla.map(t => `${t}!A1:ZZZ`),
-      }),
-      sheets.spreadsheets.values.get({ spreadsheetId: idArquivoPresencas, range: 'TiposEnsaio!A:B' }).catch(() => ({ data: { values: [] } })),
-    ]);
-
-    // Datas sem registro na aba "TiposEnsaio" são consideradas "Comum" (padrão).
-    const tipos = {};
-    (respostaTipos.data.values || []).slice(1).forEach(row => {
-      if (row[0]) tipos[row[0]] = row[1] === 'Especial' ? 'Especial' : 'Comum';
+    const respostaLote = await sheets.spreadsheets.values.batchGet({
+      spreadsheetId: idArquivoPresencas,
+      ranges: abasAla.map(t => `${t}!A1:ZZZ`),
     });
 
     let datas = [];
@@ -1301,6 +1289,20 @@ app.get('/matriz-presencas', async (req, res) => {
     });
 
     componentes.sort((a, b) => a.ala.localeCompare(b.ala) || a.nome.localeCompare(b.nome));
+
+    // Tipo ("Comum"/"Especial") lido da célula D2 da própria aba de cada data
+    // (gravado junto da lista nominal). Sem marcação, conta como "Comum".
+    const tipos = {};
+    if (datas.length > 0) {
+      const respostaTipos = await sheets.spreadsheets.values.batchGet({
+        spreadsheetId: idArquivoPresencas,
+        ranges: datas.map(d => `${d.replaceAll('/', '-')}!D2`),
+      }).catch(() => ({ data: { valueRanges: [] } }));
+      datas.forEach((data, i) => {
+        const valor = respostaTipos.data.valueRanges?.[i]?.values?.[0]?.[0];
+        tipos[data] = valor === 'Especial' ? 'Especial' : 'Comum';
+      });
+    }
 
     res.json({ datas, componentes, tipos });
   } catch (error) {

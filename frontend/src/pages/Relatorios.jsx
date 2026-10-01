@@ -8,6 +8,7 @@ function Relatorios() {
   const [presencas, setPresencas] = useState([]);
   const [historicoAlas, setHistoricoAlas] = useState([]);
   const [frequenciaPorId, setFrequenciaPorId] = useState({});
+  const [ensaiosPorTipo, setEnsaiosPorTipo] = useState({ comuns: 0, especiais: 0 });
   const [carregando, setCarregando] = useState(true);
 
   const [alaFiltro, setAlaFiltro] = useState('TODAS'); // Filtro da Tabela e PDFs
@@ -31,6 +32,10 @@ function Relatorios() {
         mapaFreq[c.id] = { presencas: c.presencas, ausencias: c.ausencias };
       });
       setFrequenciaPorId(mapaFreq);
+      setEnsaiosPorTipo({
+        comuns: respostaFreq.data.totalEnsaiosComuns || 0,
+        especiais: respostaFreq.data.totalEnsaiosEspeciais || 0,
+      });
       // Relatórios e PDFs consideram apenas os cadastros marcados como renovados
       const componentesRenovados = (resposta.data.componentes || []).filter((c) => c.renovado === 'Sim');
       setComponentes(componentesRenovados);
@@ -280,6 +285,14 @@ function Relatorios() {
         <div style={{ flex: 1, minWidth: '200px', backgroundColor: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', borderLeft: '6px solid #eab308' }}>
           <div style={{ fontSize: '14px', color: '#000000', fontWeight: 'bold' }}>ALAS ATIVAS NO SISTEMA</div>
           <div style={{ fontSize: '36px', fontWeight: 'bold', color: '#000000', marginTop: '5px' }}>{listaAlas.length}</div>
+        </div>
+        <div style={{ flex: 1, minWidth: '200px', backgroundColor: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', borderLeft: '6px solid #2563eb' }}>
+          <div style={{ fontSize: '14px', color: '#000000', fontWeight: 'bold' }}>ENSAIOS REALIZADOS</div>
+          <div style={{ fontSize: '36px', fontWeight: 'bold', color: '#000000', marginTop: '5px' }}>{ensaiosPorTipo.comuns + ensaiosPorTipo.especiais}</div>
+          <div style={{ fontSize: '13px', fontWeight: 'bold', marginTop: '6px', display: 'flex', gap: '12px' }}>
+            <span style={{ color: '#005c33' }}>Comuns: {ensaiosPorTipo.comuns}</span>
+            <span style={{ color: '#16a34a' }}>Especiais: {ensaiosPorTipo.especiais}</span>
+          </div>
         </div>
       </div>
 

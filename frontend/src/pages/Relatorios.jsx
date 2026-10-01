@@ -17,7 +17,8 @@ function Relatorios() {
   const [alaFiltroEvolucao, setAlaFiltroEvolucao] = useState('TODAS'); // Filtro do Novo Gráfico de Inscrições
   const [alaFiltroNovosRenovacoes, setAlaFiltroNovosRenovacoes] = useState('TODAS'); // Filtro do Gráfico Novos x Renovações
   const [filtroPizzaQuadra, setFiltroPizzaQuadra] = useState('alas'); // 'alas' | 'especiais' | 'todos'
-  const [fatiaEmFoco, setFatiaEmFoco] = useState(null); // índice da fatia com hover, p/ destaque + centro do donut
+  const [fatiaEmFoco, setFatiaEmFoco] = useState(null); // índice da fatia com hover, p/ destaque visual (não fixa)
+  const [fatiaSelecionada, setFatiaSelecionada] = useState(null); // índice da fatia clicada, fixa o painel de presentes/ausentes
 
   useEffect(() => {
     puxarDados();
@@ -71,13 +72,21 @@ function Relatorios() {
   }, {});
 
   // --- PROCESSAMENTO: GRÁFICO DE PIZZA "QUEM ESTÁ NA QUADRA" (último ensaio) ---
-  // Paleta categórica fixa (8 tons, ordem validada p/ distinção sob daltonismo).
-  const PALETA_CATEGORICA = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'];
-  const COR_OUTROS = '#898781';
-  // Diretoria/Convidados/Crianças mantêm sempre a mesma cor, em qualquer filtro
-  // onde apareçam (identidade não muda ao trocar de visão) — alas usam o resto
-  // da paleta por ordem de presença, já que são até ~25 e mudam a cada ensaio.
-  const CORES_ESPECIAIS = { Diretoria: PALETA_CATEGORICA[0], Convidados: PALETA_CATEGORICA[1], 'Crianças': PALETA_CATEGORICA[2] };
+  // Diretoria/Convidados/Crianças mantêm sempre a mesma cor fixa (3 categorias
+  // só, se beneficiam da paleta validada p/ daltonismo). As alas são muitas
+  // (~25) e todas aparecem como fatia própria — a essa cardinalidade não dá
+  // pra manter 8 tons CVD-seguros distintos (a própria metodologia de cor só
+  // garante isso até ~8 séries), então cada ala recebe um tom estável gerado
+  // por ângulo-áureo a partir da sua posição na lista alfabética de alas —
+  // mesma ala = mesma cor sempre, mesmo trocando de filtro ou recarregando.
+  // A legenda com rótulo direto continua sendo a fonte confiável de identidade.
+  const CORES_ESPECIAIS = { Diretoria: '#2a78d6', Convidados: '#eb6834', 'Crianças': '#1baf7a' };
+  const alasOrdenadasParaCor = Array.from(new Set([...(todasAlas || []), ...Object.keys(resumoQuadra?.presentesPorAla || {})])).sort();
+  const corParaAla = (ala) => {
+    const indice = Math.max(0, alasOrdenadasParaCor.indexOf(ala));
+    const matiz = (indice * 137.508) % 360;
+    return `hsl(${matiz.toFixed(1)}, 62%, 47%)`;
+  };
 
   const alasPresentesOrdenadas = resumoQuadra
     ? Object.entries(resumoQuadra.presentesPorAla || {})
@@ -85,22 +94,15 @@ function Relatorios() {
         .sort((a, b) => b.valor - a.valor)
     : [];
 
-  // Agrupa o rabo em "Outras alas" para não estourar o teto de fatias legíveis numa pizza.
-  const montarFatiasAlas = (maxIndividuais, slotsPaleta) => {
-    const top = alasPresentesOrdenadas.slice(0, maxIndividuais);
-    const resto = alasPresentesOrdenadas.slice(maxIndividuais);
-    const fatias = top.map((e, i) => {
-      const pctAla = e.totalAla > 0 ? ((e.valor / e.totalAla) * 100).toFixed(1) : '0';
-      return { label: e.ala, valor: e.valor, cor: slotsPaleta[i % slotsPaleta.length], detalhe: `${e.valor}/${e.totalAla} componentes da ala (${pctAla}%)` };
-    });
-    if (resto.length > 0) {
-      const valorResto = resto.reduce((acc, e) => acc + e.valor, 0);
-      const totalResto = resto.reduce((acc, e) => acc + e.totalAla, 0);
-      const pctResto = totalResto > 0 ? ((valorResto / totalResto) * 100).toFixed(1) : '0';
-      fatias.push({ label: `Outras alas (${resto.length})`, valor: valorResto, cor: COR_OUTROS, detalhe: `${valorResto}/${totalResto} componentes dessas alas (${pctResto}%)` });
-    }
-    return fatias;
-  };
+  // Todas as alas presentes, cada uma com sua própria fatia (sem agrupar "outras").
+  const montarFatiasAlas = () => alasPresentesOrdenadas.map((e) => {
+    const ausentes = Math.max(0, e.totalAla - e.valor);
+    const pctAla = e.totalAla > 0 ? ((e.valor / e.totalAla) * 100).toFixed(1) : '0';
+    return {
+      label: e.ala, valor: e.valor, cor: corParaAla(e.ala), totalAla: e.totalAla, ausentes,
+      detalhe: `${e.valor}/${e.totalAla} componentes da ala (${pctAla}%)`,
+    };
+  });
 
   const montarFatiasEspeciais = () => {
     if (!resumoQuadra) return [];
@@ -112,17 +114,16 @@ function Relatorios() {
       { label: 'Crianças', valor: esp.criancas || 0 },
     ]
       .filter(c => c.valor > 0)
-      .map(c => ({ ...c, cor: CORES_ESPECIAIS[c.label], detalhe: totalEspeciais > 0 ? `${((c.valor / totalEspeciais) * 100).toFixed(1)}% das categorias extras` : '' }));
+      .map(c => ({ ...c, cor: CORES_ESPECIAIS[c.label], totalAla: null, ausentes: null, detalhe: totalEspeciais > 0 ? `${((c.valor / totalEspeciais) * 100).toFixed(1)}% das categorias extras` : '' }));
   };
 
   let fatiasPizzaQuadra = [];
   if (filtroPizzaQuadra === 'especiais') {
     fatiasPizzaQuadra = montarFatiasEspeciais();
   } else if (filtroPizzaQuadra === 'todos') {
-    // Slots 3-7 p/ alas aqui — não colide com as cores fixas das especiais (slots 0-2)
-    fatiasPizzaQuadra = [...montarFatiasAlas(4, PALETA_CATEGORICA.slice(3)), ...montarFatiasEspeciais()];
+    fatiasPizzaQuadra = [...montarFatiasAlas(), ...montarFatiasEspeciais()];
   } else {
-    fatiasPizzaQuadra = montarFatiasAlas(6, PALETA_CATEGORICA);
+    fatiasPizzaQuadra = montarFatiasAlas();
   }
 
   // Texto branco ou escuro sobre a cor da fatia, pela luminância do hex (nunca eyeballed)
@@ -404,24 +405,32 @@ function Relatorios() {
 
       {/* ======================= QUEM ESTÁ NA QUADRA (pizza, último ensaio) ======================= */}
       <div style={{ backgroundColor: 'white', padding: '25px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px rgba(0,0,0,0.02)', boxSizing: 'border-box', marginBottom: '30px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap', gap: '15px' }}>
           <div>
             <h4 style={{ margin: 0, color: '#000000', fontWeight: 'bold' }}>Quem Está na Quadra</h4>
             <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b', fontWeight: '500' }}>
               {resumoQuadra?.data ? `Último ensaio lançado: ${resumoQuadra.data} (${resumoQuadra.tipo})` : 'Nenhum ensaio lançado ainda'}
             </p>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#000000' }}>Filtro:</label>
-            <select
-              value={filtroPizzaQuadra}
-              onChange={(e) => { setFiltroPizzaQuadra(e.target.value); setFatiaEmFoco(null); }}
-              style={{ padding: '10px 15px', borderRadius: '6px', border: '2px solid #005c33', backgroundColor: '#FFFFFF', color: '#000000', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}
-            >
-              <option value="alas">Alas</option>
-              <option value="especiais">Especiais</option>
-              <option value="todos">Todos</option>
-            </select>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
+            {totalPizzaQuadra > 0 && (
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#000000', lineHeight: 1 }}>{totalPizzaQuadra}</div>
+                <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase' }}>na quadra</div>
+              </div>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#000000' }}>Filtro:</label>
+              <select
+                value={filtroPizzaQuadra}
+                onChange={(e) => { setFiltroPizzaQuadra(e.target.value); setFatiaEmFoco(null); setFatiaSelecionada(null); }}
+                style={{ padding: '10px 15px', borderRadius: '6px', border: '2px solid #005c33', backgroundColor: '#FFFFFF', color: '#000000', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}
+              >
+                <option value="alas">Alas</option>
+                <option value="especiais">Especiais</option>
+                <option value="todos">Todos</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -434,81 +443,113 @@ function Relatorios() {
             Nenhum registro nesta categoria para o último ensaio.
           </div>
         ) : (
-          <div style={{ display: 'flex', gap: '35px', flexWrap: 'wrap', alignItems: 'center' }}>
-            <svg width="270" height="270" viewBox="0 0 260 260" style={{ flexShrink: 0, overflow: 'visible' }}>
-              {fatiasComAnguloQuadra.map((f) => {
-                const emFoco = fatiaEmFoco === f.indice;
+          <>
+            {/* Painel de detalhe: fixa ao clicar numa fatia (hover só dá o destaque visual) */}
+            <div style={{
+              marginTop: '14px', marginBottom: '20px', padding: '12px 16px', borderRadius: '6px',
+              backgroundColor: fatiaSelecionada !== null ? '#f1f5f9' : '#f8fafc',
+              border: `1px solid ${fatiaSelecionada !== null ? fatiasComAnguloQuadra[fatiaSelecionada].cor : '#e2e8f0'}`,
+              display: 'flex', alignItems: 'center', gap: '24px', flexWrap: 'wrap', minHeight: '20px',
+            }}>
+              {fatiaSelecionada !== null ? (() => {
+                const f = fatiasComAnguloQuadra[fatiaSelecionada];
                 return (
-                  <path
+                  <>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', color: '#000000', fontSize: '14px' }}>
+                      <span style={{ width: '12px', height: '12px', borderRadius: '3px', backgroundColor: f.cor, flexShrink: 0 }}></span>
+                      {f.label}
+                    </span>
+                    <span style={{ fontSize: '13px', color: '#000000' }}>Presentes: <strong style={{ color: '#005c33' }}>{f.valor}</strong></span>
+                    {f.totalAla !== null && (
+                      <>
+                        <span style={{ fontSize: '13px', color: '#000000' }}>Ausentes: <strong style={{ color: '#ef4444' }}>{f.ausentes}</strong></span>
+                        <span style={{ fontSize: '13px', color: '#000000' }}>Total da ala: <strong>{f.totalAla}</strong></span>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setFatiaSelecionada(null)}
+                      style={{ marginLeft: 'auto', border: 'none', background: 'none', color: '#64748b', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}
+                    >
+                      ✕ fechar
+                    </button>
+                  </>
+                );
+              })() : (
+                <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '500' }}>Clique numa fatia ou na legenda para ver presentes e ausentes.</span>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '35px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <svg width="270" height="270" viewBox="0 0 260 260" style={{ flexShrink: 0, overflow: 'visible' }}>
+                {fatiasComAnguloQuadra.map((f) => {
+                  const destaque = fatiaEmFoco !== null ? fatiaEmFoco : fatiaSelecionada;
+                  const emDestaque = destaque === f.indice;
+                  return (
+                    <path
+                      key={f.label}
+                      d={descreverFatiaDonut(130, 130, 118, 0, f.anguloInicio, f.anguloFim)}
+                      fill={f.cor}
+                      stroke="#FFFFFF"
+                      strokeWidth="2"
+                      opacity={destaque === null || emDestaque ? 1 : 0.4}
+                      transform={emDestaque ? `translate(${f.deslocX}, ${f.deslocY})` : undefined}
+                      style={{
+                        cursor: 'pointer',
+                        transition: 'opacity 0.15s ease, transform 0.15s ease, filter 0.15s ease',
+                        filter: emDestaque ? 'drop-shadow(0 6px 10px rgba(0,0,0,0.3))' : 'none',
+                      }}
+                      onMouseEnter={() => setFatiaEmFoco(f.indice)}
+                      onMouseLeave={() => setFatiaEmFoco(null)}
+                      onClick={() => setFatiaSelecionada(fatiaSelecionada === f.indice ? null : f.indice)}
+                    >
+                      <title>{`${f.label}: ${f.valor} (${f.pct.toFixed(1)}%)`}</title>
+                    </path>
+                  );
+                })}
+                {/* Rótulo direto só nas fatias largas o bastante p/ caber o texto sem espremer */}
+                {fatiasComAnguloQuadra.filter(f => f.pct >= 9).map((f) => (
+                  <text
+                    key={`rotulo-${f.label}`}
+                    x={f.pontoRotulo.x}
+                    y={f.pontoRotulo.y}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fontSize="13"
+                    fontWeight="bold"
+                    fill={f.textoEscuro ? '#0b0b0b' : '#FFFFFF'}
+                    style={{ pointerEvents: 'none' }}
+                  >
+                    {`${f.pct.toFixed(0)}%`}
+                  </text>
+                ))}
+              </svg>
+
+              <div style={{ flex: 1, minWidth: '260px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '6px 16px', alignContent: 'start' }}>
+                {fatiasComAnguloQuadra.map((f) => (
+                  <div
                     key={f.label}
-                    d={descreverFatiaDonut(130, 130, 118, 74, f.anguloInicio, f.anguloFim)}
-                    fill={f.cor}
-                    stroke="#FFFFFF"
-                    strokeWidth="2"
-                    opacity={fatiaEmFoco === null || emFoco ? 1 : 0.4}
-                    transform={emFoco ? `translate(${f.deslocX}, ${f.deslocY})` : undefined}
-                    style={{
-                      cursor: 'pointer',
-                      transition: 'opacity 0.15s ease, transform 0.15s ease, filter 0.15s ease',
-                      filter: emFoco ? 'drop-shadow(0 6px 10px rgba(0,0,0,0.25))' : 'none',
-                    }}
                     onMouseEnter={() => setFatiaEmFoco(f.indice)}
                     onMouseLeave={() => setFatiaEmFoco(null)}
+                    onClick={() => setFatiaSelecionada(fatiaSelecionada === f.indice ? null : f.indice)}
+                    style={{
+                      display: 'flex', flexDirection: 'column', gap: '2px', padding: '7px 10px', borderRadius: '6px', cursor: 'pointer',
+                      backgroundColor: (fatiaEmFoco === f.indice || fatiaSelecionada === f.indice) ? '#f1f5f9' : 'transparent',
+                      borderLeft: `3px solid ${(fatiaEmFoco === f.indice || fatiaSelecionada === f.indice) ? f.cor : 'transparent'}`,
+                      transition: 'background-color 0.15s ease, border-color 0.15s ease',
+                    }}
                   >
-                    <title>{`${f.label}: ${f.valor} (${f.pct.toFixed(1)}%)`}</title>
-                  </path>
-                );
-              })}
-              {/* Rótulo direto só nas fatias largas o bastante p/ caber o texto sem espremer */}
-              {fatiasComAnguloQuadra.filter(f => f.pct >= 9).map((f) => (
-                <text
-                  key={`rotulo-${f.label}`}
-                  x={f.pontoRotulo.x}
-                  y={f.pontoRotulo.y}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  fontSize="13"
-                  fontWeight="bold"
-                  fill={f.textoEscuro ? '#0b0b0b' : '#FFFFFF'}
-                  style={{ pointerEvents: 'none' }}
-                >
-                  {`${f.pct.toFixed(0)}%`}
-                </text>
-              ))}
-              <circle cx="130" cy="130" r="74" fill="#FFFFFF" />
-              <text x="130" y="122" textAnchor="middle" fontSize="32" fontWeight="bold" fill="#000000">
-                {fatiaEmFoco !== null ? fatiasComAnguloQuadra[fatiaEmFoco].valor : totalPizzaQuadra}
-              </text>
-              <text x="130" y="145" textAnchor="middle" fontSize="11" fontWeight="bold" fill="#64748b" style={{ textTransform: 'uppercase' }}>
-                {(fatiaEmFoco !== null ? fatiasComAnguloQuadra[fatiaEmFoco].label : 'Na quadra').length > 22
-                  ? 'NA QUADRA'
-                  : (fatiaEmFoco !== null ? fatiasComAnguloQuadra[fatiaEmFoco].label : 'Na quadra').toUpperCase()}
-              </text>
-            </svg>
-
-            <div style={{ flex: 1, minWidth: '260px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '6px 16px', alignContent: 'start' }}>
-              {fatiasComAnguloQuadra.map((f) => (
-                <div
-                  key={f.label}
-                  onMouseEnter={() => setFatiaEmFoco(f.indice)}
-                  onMouseLeave={() => setFatiaEmFoco(null)}
-                  style={{
-                    display: 'flex', flexDirection: 'column', gap: '2px', padding: '7px 10px', borderRadius: '6px',
-                    backgroundColor: fatiaEmFoco === f.indice ? '#f1f5f9' : 'transparent',
-                    borderLeft: `3px solid ${fatiaEmFoco === f.indice ? f.cor : 'transparent'}`,
-                    transition: 'background-color 0.15s ease, border-color 0.15s ease',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px' }}>
-                    <span style={{ width: '12px', height: '12px', borderRadius: '3px', backgroundColor: f.cor, flexShrink: 0 }}></span>
-                    <span style={{ fontWeight: 'bold', color: '#000000', flex: 1 }}>{f.label}</span>
-                    <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap' }}>{f.valor} ({f.pct.toFixed(1)}%)</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px' }}>
+                      <span style={{ width: '12px', height: '12px', borderRadius: '3px', backgroundColor: f.cor, flexShrink: 0 }}></span>
+                      <span style={{ fontWeight: 'bold', color: '#000000', flex: 1 }}>{f.label}</span>
+                      <span style={{ fontWeight: 'bold', color: '#000000', whiteSpace: 'nowrap' }}>{f.valor} ({f.pct.toFixed(1)}%)</span>
+                    </div>
+                    {f.detalhe && <div style={{ marginLeft: '22px', color: '#64748b', fontSize: '12px' }}>{f.detalhe}</div>}
                   </div>
-                  {f.detalhe && <div style={{ marginLeft: '22px', color: '#64748b', fontSize: '12px' }}>{f.detalhe}</div>}
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          </>
         )}
       </div>
 

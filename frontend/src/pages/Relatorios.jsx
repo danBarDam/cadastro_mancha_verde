@@ -9,12 +9,15 @@ function Relatorios() {
   const [historicoAlas, setHistoricoAlas] = useState([]);
   const [frequenciaPorId, setFrequenciaPorId] = useState({});
   const [ensaiosPorTipo, setEnsaiosPorTipo] = useState({ comuns: 0, especiais: 0 });
+  const [resumoQuadra, setResumoQuadra] = useState(null);
   const [carregando, setCarregando] = useState(true);
 
   const [alaFiltro, setAlaFiltro] = useState('TODAS'); // Filtro da Tabela e PDFs
   const [alaSelecionadaGrafico, setAlaSelecionadaGrafico] = useState('TODAS'); // Filtro do Gráfico Detalhado
   const [alaFiltroEvolucao, setAlaFiltroEvolucao] = useState('TODAS'); // Filtro do Novo Gráfico de Inscrições
   const [alaFiltroNovosRenovacoes, setAlaFiltroNovosRenovacoes] = useState('TODAS'); // Filtro do Gráfico Novos x Renovações
+  const [filtroPizzaQuadra, setFiltroPizzaQuadra] = useState('alas'); // 'alas' | 'especiais' | 'todos'
+  const [fatiaEmFoco, setFatiaEmFoco] = useState(null); // índice da fatia com hover, p/ destaque + centro do donut
 
   useEffect(() => {
     puxarDados();
@@ -22,11 +25,13 @@ function Relatorios() {
 
   const puxarDados = async () => {
     try {
-      const [resposta, respostaAlas, respostaFreq] = await Promise.all([
+      const [resposta, respostaAlas, respostaFreq, respostaQuadra] = await Promise.all([
         api.get('/dados-relatorio'),
         api.get('/alas'),
         api.get('/frequencia-geral'),
+        api.get('/ultimo-ensaio-resumo'),
       ]);
+      setResumoQuadra(respostaQuadra.data);
       const mapaFreq = {};
       (respostaFreq.data.componentes || []).forEach((c) => {
         mapaFreq[c.id] = { presencas: c.presencas, ausencias: c.ausencias };
@@ -64,6 +69,94 @@ function Relatorios() {
     acc[nomeAla] = (acc[nomeAla] || 0) + 1;
     return acc;
   }, {});
+
+  // --- PROCESSAMENTO: GRÁFICO DE PIZZA "QUEM ESTÁ NA QUADRA" (último ensaio) ---
+  // Paleta categórica fixa (8 tons, ordem validada p/ distinção sob daltonismo).
+  const PALETA_CATEGORICA = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'];
+  const COR_OUTROS = '#898781';
+  // Diretoria/Convidados/Crianças mantêm sempre a mesma cor, em qualquer filtro
+  // onde apareçam (identidade não muda ao trocar de visão) — alas usam o resto
+  // da paleta por ordem de presença, já que são até ~25 e mudam a cada ensaio.
+  const CORES_ESPECIAIS = { Diretoria: PALETA_CATEGORICA[0], Convidados: PALETA_CATEGORICA[1], 'Crianças': PALETA_CATEGORICA[2] };
+
+  const alasPresentesOrdenadas = resumoQuadra
+    ? Object.entries(resumoQuadra.presentesPorAla || {})
+        .map(([ala, valor]) => ({ ala, valor, totalAla: contagemPorAla[ala] || valor }))
+        .sort((a, b) => b.valor - a.valor)
+    : [];
+
+  // Agrupa o rabo em "Outras alas" para não estourar o teto de fatias legíveis numa pizza.
+  const montarFatiasAlas = (maxIndividuais, slotsPaleta) => {
+    const top = alasPresentesOrdenadas.slice(0, maxIndividuais);
+    const resto = alasPresentesOrdenadas.slice(maxIndividuais);
+    const fatias = top.map((e, i) => {
+      const pctAla = e.totalAla > 0 ? ((e.valor / e.totalAla) * 100).toFixed(1) : '0';
+      return { label: e.ala, valor: e.valor, cor: slotsPaleta[i % slotsPaleta.length], detalhe: `${e.valor}/${e.totalAla} componentes da ala (${pctAla}%)` };
+    });
+    if (resto.length > 0) {
+      const valorResto = resto.reduce((acc, e) => acc + e.valor, 0);
+      const totalResto = resto.reduce((acc, e) => acc + e.totalAla, 0);
+      const pctResto = totalResto > 0 ? ((valorResto / totalResto) * 100).toFixed(1) : '0';
+      fatias.push({ label: `Outras alas (${resto.length})`, valor: valorResto, cor: COR_OUTROS, detalhe: `${valorResto}/${totalResto} componentes dessas alas (${pctResto}%)` });
+    }
+    return fatias;
+  };
+
+  const montarFatiasEspeciais = () => {
+    if (!resumoQuadra) return [];
+    const esp = resumoQuadra.especiais || {};
+    const totalEspeciais = (esp.diretoria || 0) + (esp.convidados || 0) + (esp.criancas || 0);
+    return [
+      { label: 'Diretoria', valor: esp.diretoria || 0 },
+      { label: 'Convidados', valor: esp.convidados || 0 },
+      { label: 'Crianças', valor: esp.criancas || 0 },
+    ]
+      .filter(c => c.valor > 0)
+      .map(c => ({ ...c, cor: CORES_ESPECIAIS[c.label], detalhe: totalEspeciais > 0 ? `${((c.valor / totalEspeciais) * 100).toFixed(1)}% das categorias extras` : '' }));
+  };
+
+  let fatiasPizzaQuadra = [];
+  if (filtroPizzaQuadra === 'especiais') {
+    fatiasPizzaQuadra = montarFatiasEspeciais();
+  } else if (filtroPizzaQuadra === 'todos') {
+    // Slots 3-7 p/ alas aqui — não colide com as cores fixas das especiais (slots 0-2)
+    fatiasPizzaQuadra = [...montarFatiasAlas(4, PALETA_CATEGORICA.slice(3)), ...montarFatiasEspeciais()];
+  } else {
+    fatiasPizzaQuadra = montarFatiasAlas(6, PALETA_CATEGORICA);
+  }
+
+  const totalPizzaQuadra = fatiasPizzaQuadra.reduce((acc, f) => acc + f.valor, 0);
+  let anguloAcumuladoQuadra = 0;
+  const fatiasComAnguloQuadra = fatiasPizzaQuadra.map((f, indice) => {
+    const pct = totalPizzaQuadra > 0 ? (f.valor / totalPizzaQuadra) * 100 : 0;
+    const anguloInicio = anguloAcumuladoQuadra;
+    const anguloFim = anguloInicio + (pct / 100) * 360;
+    anguloAcumuladoQuadra = anguloFim;
+    return { ...f, pct, anguloInicio, anguloFim, indice };
+  });
+
+  const polarParaCartesiano = (cx, cy, r, anguloGraus) => {
+    const anguloRad = ((anguloGraus - 90) * Math.PI) / 180;
+    return { x: cx + r * Math.cos(anguloRad), y: cy + r * Math.sin(anguloRad) };
+  };
+
+  const descreverFatiaDonut = (cx, cy, rExterno, rInterno, anguloInicio, anguloFim) => {
+    // Clampa fatias que fecham o círculo inteiro (1 categoria = 100%) — um sweep
+    // de exatos 360° faz início e fim coincidirem e o arco SVG some.
+    const fimAjustado = (anguloFim - anguloInicio) >= 359.99 ? anguloInicio + 359.99 : anguloFim;
+    const inicioExt = polarParaCartesiano(cx, cy, rExterno, fimAjustado);
+    const fimExt = polarParaCartesiano(cx, cy, rExterno, anguloInicio);
+    const inicioInt = polarParaCartesiano(cx, cy, rInterno, anguloInicio);
+    const fimInt = polarParaCartesiano(cx, cy, rInterno, fimAjustado);
+    const arcoGrande = fimAjustado - anguloInicio <= 180 ? '0' : '1';
+    return [
+      'M', inicioExt.x, inicioExt.y,
+      'A', rExterno, rExterno, 0, arcoGrande, 0, fimExt.x, fimExt.y,
+      'L', fimInt.x, fimInt.y,
+      'A', rInterno, rInterno, 0, arcoGrande, 1, inicioInt.x, inicioInt.y,
+      'Z',
+    ].join(' ');
+  };
 
   // Une a lista oficial de alas com qualquer ala presente nos dados mas ausente da aba "Alas"
   const listaAlas = Array.from(new Set([...todasAlas, ...Object.keys(contagemPorAla)])).sort();
@@ -294,6 +387,84 @@ function Relatorios() {
             <span style={{ color: '#16a34a' }}>Especiais: {ensaiosPorTipo.especiais}</span>
           </div>
         </div>
+      </div>
+
+      {/* ======================= QUEM ESTÁ NA QUADRA (pizza, último ensaio) ======================= */}
+      <div style={{ backgroundColor: 'white', padding: '25px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px rgba(0,0,0,0.02)', boxSizing: 'border-box', marginBottom: '30px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
+          <div>
+            <h4 style={{ margin: 0, color: '#000000', fontWeight: 'bold' }}>Quem Está na Quadra</h4>
+            <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b', fontWeight: '500' }}>
+              {resumoQuadra?.data ? `Último ensaio lançado: ${resumoQuadra.data} (${resumoQuadra.tipo})` : 'Nenhum ensaio lançado ainda'}
+            </p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#000000' }}>Filtro:</label>
+            <select
+              value={filtroPizzaQuadra}
+              onChange={(e) => { setFiltroPizzaQuadra(e.target.value); setFatiaEmFoco(null); }}
+              style={{ padding: '10px 15px', borderRadius: '6px', border: '2px solid #005c33', backgroundColor: '#FFFFFF', color: '#000000', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}
+            >
+              <option value="alas">Alas</option>
+              <option value="especiais">Especiais</option>
+              <option value="todos">Todos</option>
+            </select>
+          </div>
+        </div>
+
+        {!resumoQuadra?.data ? (
+          <div style={{ textAlign: 'center', color: '#64748b', fontWeight: 'bold', padding: '40px 0' }}>
+            Nenhum ensaio lançado ainda — lance uma chamada em "Presenças" para ver o gráfico.
+          </div>
+        ) : totalPizzaQuadra === 0 ? (
+          <div style={{ textAlign: 'center', color: '#64748b', fontWeight: 'bold', padding: '40px 0' }}>
+            Nenhum registro nesta categoria para o último ensaio.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: '30px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <svg width="260" height="260" viewBox="0 0 260 260" style={{ flexShrink: 0 }}>
+              {fatiasComAnguloQuadra.map((f) => (
+                <path
+                  key={f.label}
+                  d={descreverFatiaDonut(130, 130, 120, 66, f.anguloInicio, f.anguloFim)}
+                  fill={f.cor}
+                  stroke="#FFFFFF"
+                  strokeWidth="2"
+                  opacity={fatiaEmFoco === null || fatiaEmFoco === f.indice ? 1 : 0.35}
+                  style={{ cursor: 'pointer', transition: 'opacity 0.15s ease' }}
+                  onMouseEnter={() => setFatiaEmFoco(f.indice)}
+                  onMouseLeave={() => setFatiaEmFoco(null)}
+                >
+                  <title>{`${f.label}: ${f.valor} (${f.pct.toFixed(1)}%)`}</title>
+                </path>
+              ))}
+              <text x="130" y="122" textAnchor="middle" fontSize="30" fontWeight="bold" fill="#000000">
+                {fatiaEmFoco !== null ? fatiasComAnguloQuadra[fatiaEmFoco].valor : totalPizzaQuadra}
+              </text>
+              <text x="130" y="144" textAnchor="middle" fontSize="11" fontWeight="bold" fill="#64748b">
+                {(fatiaEmFoco !== null ? fatiasComAnguloQuadra[fatiaEmFoco].label : 'NA QUADRA').toUpperCase()}
+              </text>
+            </svg>
+
+            <div style={{ flex: 1, minWidth: '260px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {fatiasComAnguloQuadra.map((f) => (
+                <div
+                  key={f.label}
+                  onMouseEnter={() => setFatiaEmFoco(f.indice)}
+                  onMouseLeave={() => setFatiaEmFoco(null)}
+                  style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '6px 8px', borderRadius: '4px', backgroundColor: fatiaEmFoco === f.indice ? '#f1f5f9' : 'transparent' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px' }}>
+                    <span style={{ width: '12px', height: '12px', borderRadius: '3px', backgroundColor: f.cor, flexShrink: 0 }}></span>
+                    <span style={{ fontWeight: 'bold', color: '#000000', flex: 1 }}>{f.label}</span>
+                    <span style={{ fontWeight: 'bold', color: '#000000' }}>{f.valor} ({f.pct.toFixed(1)}%)</span>
+                  </div>
+                  {f.detalhe && <div style={{ marginLeft: '22px', color: '#64748b', fontSize: '12px' }}>{f.detalhe}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ======================= LINHA 1: GRÁFICO GERAL ======================= */}

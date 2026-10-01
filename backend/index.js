@@ -458,17 +458,23 @@ async function reconstruirMatrizesPorAla(ensaioAtual = null, opcoes = {}) {
   }
 }
 
-// Grava o tipo de um ensaio ("Comum" ou "Especial") na própria aba da data
-// (células D1/D2), junto da lista nominal — a aba de cada ensaio já é a fonte
-// de verdade sobre ele, então o tipo fica junto em vez de numa aba à parte
-// casada por string de data. Falha aqui não deve invalidar o registro do ensaio.
-async function salvarTipoEnsaioNaAba(nomeAba, tipo) {
+// Grava o tipo do ensaio ("Comum"/"Especial") e as contagens extras que não
+// vêm do cadastro (Diretoria, Convidados, Crianças) na própria aba da data
+// (células D1:G2), junto da lista nominal — a aba de cada ensaio já é a fonte
+// de verdade sobre ele. Falha aqui não deve invalidar o registro do ensaio.
+async function salvarMetadadosEnsaioNaAba(nomeAba, { tipo, diretoria, convidados, criancas }) {
   const idPresencas = process.env.PRESENCAS_SPREADSHEET_ID;
   const tipoValido = tipo === 'Especial' ? 'Especial' : 'Comum';
+  const numOuZero = (v) => { const n = parseInt(v, 10); return Number.isFinite(n) && n >= 0 ? n : 0; };
 
   await sheets.spreadsheets.values.update({
-    spreadsheetId: idPresencas, range: `${nomeAba}!D1:D2`, valueInputOption: 'RAW',
-    requestBody: { values: [['Tipo de Ensaio'], [tipoValido]] },
+    spreadsheetId: idPresencas, range: `${nomeAba}!D1:G2`, valueInputOption: 'RAW',
+    requestBody: {
+      values: [
+        ['Tipo de Ensaio', 'Diretoria', 'Convidados', 'Crianças'],
+        [tipoValido, numOuZero(diretoria), numOuZero(convidados), numOuZero(criancas)],
+      ],
+    },
   });
 }
 
@@ -661,7 +667,7 @@ app.post('/marcar-presenca-individual', async (req, res) => {
 // --- ROTA 8: Grava Presenças e Ausências por Ala ---
 app.post('/registrar-ensaio-completo', async (req, res) => {
   try {
-    const { data, listaNominal, tipoEnsaio } = req.body;
+    const { data, listaNominal, tipoEnsaio, extras } = req.body;
     if (!data) return res.status(400).json({ error: 'A data é obrigatória.' });
 
     // Regra: só existe ensaio se houver ao menos 1 presença registrada. Uma
@@ -695,7 +701,7 @@ app.post('/registrar-ensaio-completo', async (req, res) => {
 
     // Falha aqui não invalida o ensaio: presenças e matrizes já foram salvas.
     try {
-      await salvarTipoEnsaioNaAba(nomeNovaAba, tipoEnsaio);
+      await salvarMetadadosEnsaioNaAba(nomeNovaAba, { tipo: tipoEnsaio, ...(extras || {}) });
     } catch (e) {
       console.error('Falha ao salvar o tipo do ensaio:', e);
     }
@@ -712,7 +718,7 @@ app.post('/registrar-ensaio-completo', async (req, res) => {
 // reconstrói a matriz por ala e os resumos Geral/Alas.
 app.post('/importar-presencas', async (req, res) => {
   try {
-    const { data, ids, modo, tipoEnsaio } = req.body;
+    const { data, ids, modo, tipoEnsaio, extras } = req.body;
     if (!data) return res.status(400).json({ error: 'A data é obrigatória.' });
     if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'Informe ao menos um ID.' });
 
@@ -786,7 +792,7 @@ app.post('/importar-presencas', async (req, res) => {
 
     // Falha aqui não invalida a importação: presenças e matrizes já foram salvas.
     try {
-      await salvarTipoEnsaioNaAba(nomeAba, tipoEnsaio);
+      await salvarMetadadosEnsaioNaAba(nomeAba, { tipo: tipoEnsaio, ...(extras || {}) });
     } catch (e) {
       console.error('Falha ao salvar o tipo do ensaio:', e);
     }
@@ -1308,6 +1314,66 @@ app.get('/matriz-presencas', async (req, res) => {
   } catch (error) {
     console.error('Erro ao montar matriz de presenças:', error);
     res.status(500).json({ error: 'Erro interno ao montar a matriz de presenças.' });
+  }
+});
+
+// --- ROTA 17b: Resumo de quem está na quadra no último ensaio lançado ---
+// Lê a aba de ensaio mais recente (nomeada pela data) e devolve a contagem de
+// presentes por ala (coluna "Ala" da própria aba) mais o tipo do ensaio e as
+// categorias extras (Diretoria/Convidados/Crianças) gravadas em D1:G2.
+app.get('/ultimo-ensaio-resumo', async (req, res) => {
+  try {
+    const idArquivoPresencas = process.env.PRESENCAS_SPREADSHEET_ID;
+
+    const infoPlanilha = await sheets.spreadsheets.get({ spreadsheetId: idArquivoPresencas });
+    const titulos = (infoPlanilha.data.sheets || []).map(a => a.properties.title);
+    const abasEnsaio = titulos.filter(ehAbaDeEnsaio);
+
+    if (abasEnsaio.length === 0) {
+      return res.json({ data: null, tipo: 'Comum', presentesPorAla: {}, totalPresentes: 0, especiais: { diretoria: 0, convidados: 0, criancas: 0 } });
+    }
+
+    const maisRecente = abasEnsaio.reduce((melhor, titulo) => {
+      const d = parseDataFlex(titulo.replaceAll('-', '/'));
+      if (!d) return melhor;
+      return (!melhor || d > melhor.data) ? { titulo, data: d } : melhor;
+    }, null);
+
+    if (!maisRecente) {
+      return res.json({ data: null, tipo: 'Comum', presentesPorAla: {}, totalPresentes: 0, especiais: { diretoria: 0, convidados: 0, criancas: 0 } });
+    }
+
+    const resposta = await sheets.spreadsheets.values.get({
+      spreadsheetId: idArquivoPresencas, range: `${maisRecente.titulo}!A1:G`,
+    });
+    const linhas = resposta.data.values || [];
+
+    const presentesPorAla = {};
+    let totalPresentes = 0;
+    linhas.slice(1).forEach(row => {
+      if (!row[0]) return;
+      const ala = (row[2] || 'Sem Ala').trim();
+      presentesPorAla[ala] = (presentesPorAla[ala] || 0) + 1;
+      totalPresentes += 1;
+    });
+
+    const metadados = linhas[1] || [];
+    const numOuZero = (v) => { const n = parseInt(v, 10); return Number.isFinite(n) ? n : 0; };
+
+    res.json({
+      data: maisRecente.titulo.replaceAll('-', '/'),
+      tipo: metadados[3] === 'Especial' ? 'Especial' : 'Comum',
+      presentesPorAla,
+      totalPresentes,
+      especiais: {
+        diretoria: numOuZero(metadados[4]),
+        convidados: numOuZero(metadados[5]),
+        criancas: numOuZero(metadados[6]),
+      },
+    });
+  } catch (error) {
+    console.error('Erro ao montar o resumo do último ensaio:', error);
+    res.status(500).json({ error: 'Erro interno ao montar o resumo do último ensaio.' });
   }
 });
 

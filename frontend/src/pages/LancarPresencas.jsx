@@ -5,6 +5,8 @@ function LancarPresencas() {
   const hoje = new Date().toISOString().split('T')[0];
   const [dataEnsaio, setDataEnsaio] = useState(hoje);
   const [tipoEnsaio, setTipoEnsaio] = useState('Comum');
+  // Pessoas na quadra que não são componentes do cadastro (usado no gráfico de pizza dos Relatórios)
+  const [extras, setExtras] = useState({ diretoria: 0, convidados: 0, criancas: 0 });
   const [termoBusca, setTermoBusca] = useState('');
   const [componentesBase, setComponentesBase] = useState([]);
   const [carregando, setCarregando] = useState(true);
@@ -83,6 +85,7 @@ function LancarPresencas() {
         data: dataEnsaio.split('-').reverse().join('/'),
         listaNominal: presentesNaQuadra,
         tipoEnsaio,
+        extras,
       });
 
       setMensagem({ texto: 'Dados salvos com sucesso na planilha exclusiva!', tipo: 'sucesso' });
@@ -93,6 +96,7 @@ function LancarPresencas() {
       setTotalAusentesManual(componentesBase.length);
       setDataEnsaio(hoje);
       setTipoEnsaio('Comum');
+      setExtras({ diretoria: 0, convidados: 0, criancas: 0 });
     } catch (err) {
       setMensagem({ texto: err.response?.data?.error || 'Falha ao salvar ensaio.', tipo: 'erro' });
     }
@@ -138,6 +142,7 @@ function LancarPresencas() {
         ids: listaIds,
         modo: substituirImportacao ? 'substituir' : 'mesclar',
         tipoEnsaio,
+        extras,
       });
       setResultadoImportacao(data);
       setMensagem({
@@ -446,6 +451,27 @@ function LancarPresencas() {
           <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 'bold', color: '#000000' }}>Ausentes:</label>
           <input type="number" value={totalAusentesManual} onChange={(e) => setTotalAusentesManual(parseInt(e.target.value) || 0)} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#FFFFFF', color: '#000000', fontWeight: 'bold', boxSizing: 'border-box' }} />
         </div>
+      </div>
+
+      {/* PESSOAS NA QUADRA FORA DO CADASTRO (alimenta o gráfico de pizza dos Relatórios) */}
+      <div style={{ display: 'flex', gap: '15px', marginBottom: '25px', flexWrap: 'wrap' }}>
+        <div style={{ flex: '0 0 100%', fontSize: '13px', fontWeight: 'bold', color: '#000000' }}>Pessoas na quadra fora do cadastro:</div>
+        {[
+          { chave: 'diretoria', label: 'Diretoria' },
+          { chave: 'convidados', label: 'Convidados' },
+          { chave: 'criancas', label: 'Crianças' },
+        ].map(({ chave, label }) => (
+          <div key={chave} style={{ flex: 1, minWidth: '140px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 'bold', color: '#000000' }}>{label}:</label>
+            <input
+              type="number"
+              min="0"
+              value={extras[chave]}
+              onChange={(e) => setExtras({ ...extras, [chave]: Math.max(0, parseInt(e.target.value) || 0) })}
+              style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#FFFFFF', color: '#000000', fontWeight: 'bold', boxSizing: 'border-box' }}
+            />
+          </div>
+        ))}
       </div>
 
       {consultaData && (

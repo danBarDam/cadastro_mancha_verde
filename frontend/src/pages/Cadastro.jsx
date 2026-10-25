@@ -23,6 +23,8 @@ function Cadastro() {
   const [data, setData] = useState(new Date().toISOString().split('T')[0]);
   const [fotoSrc, setFotoSrc] = useState(null);
   const [cameraAtiva, setCameraAtiva] = useState(false);
+  // 'user' = câmera frontal, 'environment' = traseira (celulares com as duas)
+  const [ladoCamera, setLadoCamera] = useState('user');
   const [telefone, setTelefone] = useState('');
   const [dataNascimento, setDataNascimento] = useState('');
   
@@ -409,17 +411,27 @@ function Cadastro() {
             /* CENÁRIO 2: Câmera Ativa para tirar a foto */
             cameraAtiva ? (
               <div style={{ width: '100%', maxWidth: '400px' }}>
-                <Webcam 
-                  audio={false} 
-                  ref={webcamRef} 
-                  screenshotFormat="image/jpeg" 
-                  width="100%" 
-                  style={{ borderRadius: '6px', marginBottom: '10px' }} 
-                  videoConstraints={{ facingMode: "user" }} 
+                <Webcam
+                  key={ladoCamera}
+                  audio={false}
+                  ref={webcamRef}
+                  screenshotFormat="image/jpeg"
+                  width="100%"
+                  style={{ borderRadius: '6px', marginBottom: '10px' }}
+                  videoConstraints={{ facingMode: ladoCamera }}
+                  mirrored={ladoCamera === 'user'}
                 />
-                <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
                   <button type="button" className="btn-secundario" style={{ backgroundColor: '#005c33', color: 'white' }} onClick={capturarFoto}>
                     Capturar Imagem
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secundario"
+                    onClick={() => setLadoCamera((lado) => (lado === 'user' ? 'environment' : 'user'))}
+                    title="Alternar entre câmera frontal e traseira"
+                  >
+                    🔄 {ladoCamera === 'user' ? 'Usar Traseira' : 'Usar Frontal'}
                   </button>
                   <button type="button" className="btn-secundario" onClick={alternarCamera}>
                     Cancelar

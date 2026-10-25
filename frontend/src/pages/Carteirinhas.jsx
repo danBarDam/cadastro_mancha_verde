@@ -199,7 +199,7 @@ function Carteirinhas() {
             className="form-input"
             value={alaLote}
             onChange={(e) => setAlaLote(e.target.value)}
-            style={{ flex: '1 1 220px', height: '45px', fontSize: '16px' }}
+            style={{ flex: '1 1 220px', height: '45px', fontSize: '16px', minWidth: 0 }}
           >
             <option value="">Selecione a Ala...</option>
             {alasLista.map((nomeAla, idx) => (
@@ -211,7 +211,7 @@ function Carteirinhas() {
             onClick={gerarLote}
             disabled={!alaLote || gerandoLote}
             className="btn-principal"
-            style={{ width: '160px', height: '45px', borderRadius: '6px', marginTop: 0, backgroundColor: '#005c33' }}
+            style={{ flex: '1 1 160px', height: '45px', borderRadius: '6px', marginTop: 0, backgroundColor: '#005c33' }}
           >
             {gerandoLote ? 'Gerando...' : 'Gerar Lote'}
           </button>
@@ -228,19 +228,19 @@ function Carteirinhas() {
         )}
       </div>
 
-      <form onSubmit={lidarComBusca} style={{ display: 'flex', gap: '10px', marginBottom: '30px' }}>
+      <form onSubmit={lidarComBusca} style={{ display: 'flex', gap: '10px', marginBottom: '30px', flexWrap: 'wrap' }}>
         <input
           type="text"
           className="form-input"
           placeholder="Ex: Nome do componente ou CPF..."
           value={termoBusca}
           onChange={(e) => setTermoBusca(e.target.value)}
-          style={{ flex: 1, height: '45px', fontSize: '16px' }}
+          style={{ flex: '3 1 200px', height: '45px', fontSize: '16px', minWidth: 0 }}
         />
         <button
           type="submit"
           className="btn-principal"
-          style={{ width: '140px', height: '45px', borderRadius: '6px', marginTop: 0, backgroundColor: '#005c33' }}
+          style={{ flex: '1 1 120px', height: '45px', borderRadius: '6px', marginTop: 0, backgroundColor: '#005c33' }}
           disabled={carregando}
         >
           {carregando ? 'Buscando...' : 'Pesquisar'}

@@ -597,8 +597,8 @@ function Relatorios() {
       <div style={{ display: 'flex', gap: '30px', marginBottom: '30px', flexWrap: 'wrap', width: '100%' }}>
         
         {/* GRÁFICO: FREQUÊNCIA DETALHADA POR SETOR */}
-        <div style={{ flex: 2, minWidth: '350px', backgroundColor: 'white', padding: '25px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px rgba(0,0,0,0.02)', boxSizing: 'border-box' }}>
-          
+        <div style={{ flex: 2, minWidth: 'min(350px, 100%)', backgroundColor: 'white', padding: '25px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px rgba(0,0,0,0.02)', boxSizing: 'border-box' }}>
+
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', flexWrap: 'wrap', gap: '15px' }}>
             <div>
               <h4 style={{ margin: 0, color: '#000000', fontWeight: 'bold' }}>Frequência Detalhada por Setor</h4>
@@ -607,12 +607,12 @@ function Relatorios() {
               </p>
             </div>
             
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', minWidth: 0, maxWidth: '100%' }}>
               <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#000000' }}>Filtro:</label>
-              <select 
-                value={alaSelecionadaGrafico} 
+              <select
+                value={alaSelecionadaGrafico}
                 onChange={(e) => setAlaSelecionadaGrafico(e.target.value)}
-                style={{ padding: '10px 15px', borderRadius: '6px', border: '2px solid #005c33', backgroundColor: '#FFFFFF', color: '#000000', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}
+                style={{ flex: '1 1 160px', minWidth: 0, maxWidth: '100%', padding: '10px 15px', borderRadius: '6px', border: '2px solid #005c33', backgroundColor: '#FFFFFF', color: '#000000', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}
               >
                 <option value="TODAS">TODAS AS ALAS</option>
                 {listaAlas.map(ala => (
@@ -684,7 +684,7 @@ function Relatorios() {
 
       {/* ======================= LINHA 3: GRÁFICO DE EVOLUÇÃO DE INSCRIÇÕES + NOVOS x RENOVAÇÕES ======================= */}
       <div style={{ display: 'flex', gap: '30px', marginBottom: '40px', flexWrap: 'wrap', width: '100%' }}>
-        <div style={{ flex: 2, minWidth: '350px', backgroundColor: 'white', padding: '25px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px rgba(0,0,0,0.02)', boxSizing: 'border-box' }}>
+        <div style={{ flex: '2 1 350px', minWidth: 0, maxWidth: '100%', backgroundColor: 'white', padding: '25px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px rgba(0,0,0,0.02)', boxSizing: 'border-box' }}>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', flexWrap: 'wrap', gap: '15px' }}>
             <div>
@@ -694,12 +694,12 @@ function Relatorios() {
               </p>
             </div>
             
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', minWidth: 0, maxWidth: '100%' }}>
               <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#000000' }}>Filtro Setorial:</label>
-              <select 
-                value={alaFiltroEvolucao} 
+              <select
+                value={alaFiltroEvolucao}
                 onChange={(e) => setAlaFiltroEvolucao(e.target.value)}
-                style={{ padding: '10px 15px', borderRadius: '6px', border: '2px solid #2563eb', backgroundColor: '#FFFFFF', color: '#000000', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}
+                style={{ flex: '1 1 160px', minWidth: 0, maxWidth: '100%', padding: '10px 15px', borderRadius: '6px', border: '2px solid #2563eb', backgroundColor: '#FFFFFF', color: '#000000', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}
               >
                 <option value="TODAS">TODAS AS ALAS (GERAL)</option>
                 {listaAlas.map(ala => (
@@ -775,7 +775,7 @@ function Relatorios() {
             <select
               value={alaFiltroNovosRenovacoes}
               onChange={(e) => setAlaFiltroNovosRenovacoes(e.target.value)}
-              style={{ padding: '10px 15px', borderRadius: '6px', border: '2px solid #2563eb', backgroundColor: '#FFFFFF', color: '#000000', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}
+              style={{ flex: '1 1 200px', minWidth: 0, maxWidth: '100%', boxSizing: 'border-box', padding: '10px 15px', borderRadius: '6px', border: '2px solid #2563eb', backgroundColor: '#FFFFFF', color: '#000000', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer' }}
             >
               <option value="TODAS">TODAS AS ALAS (GERAL)</option>
               {listaAlas.map(ala => (
@@ -820,9 +820,9 @@ function Relatorios() {
           <div style={{ flex: 1, minWidth: '200px' }}>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#000000', marginBottom: '6px' }}>Filtrar por Ala:</label>
             <select 
-              value={alaFiltro} 
+              value={alaFiltro}
               onChange={(e) => setAlaFiltro(e.target.value)}
-              style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#FFFFFF', color: '#000000', fontWeight: 'bold' }}
+              style={{ width: '100%', minWidth: 0, padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#FFFFFF', color: '#000000', fontWeight: 'bold', boxSizing: 'border-box' }}
             >
               <option value="TODAS">Todas as Alas (Geral)</option>
               {listaAlas.map(ala => (

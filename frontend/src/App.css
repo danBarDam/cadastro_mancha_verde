@@ -33,12 +33,14 @@ body {
 
 .form-group {
   flex: 1;
+  min-width: 0; /* permite o input encolher abaixo do tamanho intrínseco em telas estreitas */
   display: flex;
   flex-direction: column;
 }
 
 .form-group.flex-2 {
   flex: 2;
+  min-width: 0;
 }
 
 .form-label {
@@ -336,5 +338,26 @@ body {
 
   .btn-usuario {
     text-align: center;
+  }
+}
+
+/* --- RESPONSIVO: FORMULÁRIOS EM TELA ESTREITA --- */
+/* Abaixo de 600px, as linhas de formulário (.form-row) empilham em coluna
+   única em vez de espremer dois campos lado a lado — acima disso o layout
+   de PC/tablet (duas colunas) continua exatamente como era. */
+@media (max-width: 600px) {
+  .container {
+    margin: 15px auto;
+    padding: 20px 16px;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .form-row .form-group,
+  .form-row .form-group.flex-2 {
+    width: 100%;
   }
 }

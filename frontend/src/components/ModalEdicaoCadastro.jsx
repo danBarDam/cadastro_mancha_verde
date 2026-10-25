@@ -8,6 +8,7 @@ import { calcularIdade } from '../utils/idade';
 // Cores mais claras para os campos de texto da área de edição
 const inputEdicaoStyle = {
   width: '100%',
+  minWidth: 0,
   padding: '8px',
   marginTop: '5px',
   borderRadius: '4px',
@@ -26,6 +27,8 @@ function ModalEdicaoCadastro({ componente, aoFechar, aoSalvar }) {
   const [erroCepEdicao, setErroCepEdicao] = useState('');
   const [novaFotoEdicao, setNovaFotoEdicao] = useState(null);
   const [cameraEdicaoAtiva, setCameraEdicaoAtiva] = useState(false);
+  // 'user' = câmera frontal, 'environment' = traseira (celulares com as duas)
+  const [ladoCameraEdicao, setLadoCameraEdicao] = useState('user');
   const [salvando, setSalvando] = useState(false);
   const [erroEdicao, setErroEdicao] = useState('');
 
@@ -339,18 +342,28 @@ function ModalEdicaoCadastro({ componente, aoFechar, aoSalvar }) {
           {cameraEdicaoAtiva ? (
             <div>
               <Webcam
+                key={ladoCameraEdicao}
                 audio={false}
                 ref={webcamRefEdicao}
                 screenshotFormat="image/jpeg"
                 width="100%"
                 style={{ borderRadius: '6px', marginBottom: '10px' }}
-                videoConstraints={{ facingMode: "user" }}
+                videoConstraints={{ facingMode: ladoCameraEdicao }}
+                mirrored={ladoCameraEdicao === 'user'}
               />
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button type="button" onClick={capturarFotoEdicao} style={{ flex: 1, padding: '10px', backgroundColor: '#005c33', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <button type="button" onClick={capturarFotoEdicao} style={{ flex: '1 1 120px', padding: '10px', backgroundColor: '#005c33', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
                   Capturar Imagem
                 </button>
-                <button type="button" onClick={alternarCameraEdicao} style={{ flex: 1, padding: '10px', backgroundColor: '#e2e8f0', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                <button
+                  type="button"
+                  onClick={() => setLadoCameraEdicao((lado) => (lado === 'user' ? 'environment' : 'user'))}
+                  style={{ flex: '1 1 120px', padding: '10px', backgroundColor: '#e2e8f0', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                  title="Alternar entre câmera frontal e traseira"
+                >
+                  🔄 {ladoCameraEdicao === 'user' ? 'Traseira' : 'Frontal'}
+                </button>
+                <button type="button" onClick={alternarCameraEdicao} style={{ flex: '1 1 120px', padding: '10px', backgroundColor: '#e2e8f0', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
                   Cancelar
                 </button>
               </div>

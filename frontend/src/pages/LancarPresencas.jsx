@@ -494,7 +494,7 @@ function LancarPresencas() {
         <div style={{ border: '1px solid #cbd5e1', borderRadius: '6px', padding: '15px', marginBottom: '25px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
             <h4 style={{ margin: 0, color: '#000000', fontWeight: 'bold' }}>Chamada de {consultaData.data} — lista nominal</h4>
-            <select value={alaFiltroVisuais} onChange={(e) => setAlaFiltroVisuais(e.target.value)} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e1', color: '#000000', backgroundColor: '#FFFFFF', fontWeight: 'bold', fontSize: '13px' }}>
+            <select value={alaFiltroVisuais} onChange={(e) => setAlaFiltroVisuais(e.target.value)} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e1', color: '#000000', backgroundColor: '#FFFFFF', fontWeight: 'bold', fontSize: '13px', minWidth: 0, maxWidth: '100%' }}>
               <option value="TODAS">Visualizar Todas as Alas</option>
               {listaAlas.map(ala => <option key={ala} value={ala}>{ala.toUpperCase()}</option>)}
             </select>
@@ -542,7 +542,7 @@ function LancarPresencas() {
       <div style={{ border: '1px solid #cbd5e1', borderRadius: '6px', padding: '15px', marginBottom: '25px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
           <h4 style={{ margin: 0, color: '#000000', fontWeight: 'bold' }}>Integrantes na Quadra ({presentesNaQuadra.length})</h4>
-          <select value={alaFiltroVisuais} onChange={(e) => setAlaFiltroVisuais(e.target.value)} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e1', color: '#000000', backgroundColor: '#FFFFFF', fontWeight: 'bold', fontSize: '13px' }}>
+          <select value={alaFiltroVisuais} onChange={(e) => setAlaFiltroVisuais(e.target.value)} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e1', color: '#000000', backgroundColor: '#FFFFFF', fontWeight: 'bold', fontSize: '13px', minWidth: 0, maxWidth: '100%' }}>
             <option value="TODAS">Visualizar Todas as Alas</option>
             {listaAlas.map(ala => <option key={ala} value={ala}>{ala.toUpperCase()}</option>)}
           </select>
@@ -609,7 +609,7 @@ function LancarPresencas() {
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '12px', fontSize: '13px', color: '#000000' }}>
         <label style={{ fontWeight: 'bold' }}>Filtrar relatório por Ala:</label>
-        <select value={alaFiltroVisuais} onChange={(e) => setAlaFiltroVisuais(e.target.value)} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e1', color: '#000000', backgroundColor: '#FFFFFF', fontWeight: 'bold', fontSize: '13px' }}>
+        <select value={alaFiltroVisuais} onChange={(e) => setAlaFiltroVisuais(e.target.value)} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e1', color: '#000000', backgroundColor: '#FFFFFF', fontWeight: 'bold', fontSize: '13px', minWidth: 0, maxWidth: '100%' }}>
           <option value="TODAS">Todas as Alas</option>
           {listaAlas.map(ala => <option key={ala} value={ala}>{ala.toUpperCase()}</option>)}
         </select>

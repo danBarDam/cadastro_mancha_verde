@@ -207,6 +207,8 @@ function ModalEdicaoCadastro({ componente, aoFechar, aoSalvar }) {
             CPF:
             <input
               type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={formEdicao.cpf || ''}
               onChange={handleCpfEdicaoChange}
               style={inputEdicaoStyle}

@@ -253,30 +253,47 @@ app.get('/buscar', async (req, res) => {
     const rows = response.data.values;
     if (!rows || rows.length === 0) return res.json([]);
 
-    const termoTratado = termo.toLowerCase().trim();
-    const termoSemPontos = termoTratado.replace(/\D/g, '');
+    let resultados;
 
-    // Colunas que identificam a pessoa: id, nome, cpf, telefone.
-    // Antes a busca comparava com a linha inteira, o que incluía cep, data e o
-    // link da foto (uma string cheia de números/letras aleatórias), fazendo
-    // qualquer termo "bater" com quase todo mundo.
-    const colunasPorCampo = {
-      id: [row => row[0]],
-      nome: [row => row[2]],
-      cpf: [row => row[3]],
-    };
-    const obterCelulas = colunasPorCampo[campo] || [row => row[0], row => row[2], row => row[3], row => row[4]];
+    if (campo === 'data') {
+      // Busca por data de cadastro (coluna L) — comparação por dia de
+      // calendário via parseDataFlex, já que a coluna pode ter sido gravada
+      // em formatos diferentes (dd/mm/aaaa ou aaaa-mm-dd) dependendo de quando
+      // o registro foi feito.
+      const dataAlvo = parseDataFlex(termo);
+      if (!dataAlvo) return res.status(400).json({ error: 'Data inválida.' });
 
-    const resultados = rows.filter((row, index) => {
-      if (index === 0) return false;
-      const camposBusca = obterCelulas.map(obter => obter(row));
-      return camposBusca.some(celula => {
-        if (!celula) return false;
-        const textoCelula = celula.toString().toLowerCase();
-        const celulaSemPontos = textoCelula.replace(/\D/g, '');
-        return textoCelula.includes(termoTratado) || (termoSemPontos && celulaSemPontos.includes(termoSemPontos));
+      resultados = rows.filter((row, index) => {
+        if (index === 0) return false;
+        const dataLinha = parseDataFlex(row[11]);
+        return dataLinha && dataLinha.toDateString() === dataAlvo.toDateString();
       });
-    });
+    } else {
+      const termoTratado = termo.toLowerCase().trim();
+      const termoSemPontos = termoTratado.replace(/\D/g, '');
+
+      // Colunas que identificam a pessoa: id, nome, cpf, telefone.
+      // Antes a busca comparava com a linha inteira, o que incluía cep, data e o
+      // link da foto (uma string cheia de números/letras aleatórias), fazendo
+      // qualquer termo "bater" com quase todo mundo.
+      const colunasPorCampo = {
+        id: [row => row[0]],
+        nome: [row => row[2]],
+        cpf: [row => row[3]],
+      };
+      const obterCelulas = colunasPorCampo[campo] || [row => row[0], row => row[2], row => row[3], row => row[4]];
+
+      resultados = rows.filter((row, index) => {
+        if (index === 0) return false;
+        const camposBusca = obterCelulas.map(obter => obter(row));
+        return camposBusca.some(celula => {
+          if (!celula) return false;
+          const textoCelula = celula.toString().toLowerCase();
+          const celulaSemPontos = textoCelula.replace(/\D/g, '');
+          return textoCelula.includes(termoTratado) || (termoSemPontos && celulaSemPontos.includes(termoSemPontos));
+        });
+      });
+    }
 
     const dadosFormatados = resultados.map(row => ({
       id: row[0],

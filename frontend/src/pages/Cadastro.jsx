@@ -36,6 +36,7 @@ function Cadastro() {
   const [ultimoCadastro, setUltimoCadastro] = useState(null);
   const [gerandoCarteirinha, setGerandoCarteirinha] = useState(false);
   const [statusCarteirinha, setStatusCarteirinha] = useState('');
+  const [buscandoProximoId, setBuscandoProximoId] = useState(false);
 
   const webcamRef = useRef(null);
 
@@ -62,6 +63,24 @@ function Cadastro() {
       setId(idAutoGuardado); // Volta para o ID automático
     } else {
       setId(''); // Limpa o campo para a pessoa digitar a carteirinha antiga
+    }
+  };
+
+  // Busca o próximo ID livre na hora (botão "+"). Útil quando mais de uma
+  // pessoa usa o sistema ao mesmo tempo: o ID é fixado quando a página abre,
+  // então se alguém mais já cadastrou enquanto este formulário estava aberto,
+  // clicar aqui pega o número realmente disponível agora, em vez do número
+  // antigo (que o backend recusaria por já existir).
+  const atualizarProximoId = async () => {
+    setBuscandoProximoId(true);
+    try {
+      const resId = await api.get('/proximo-id');
+      setIdAutoGuardado(resId.data.proximoId);
+      setId(resId.data.proximoId);
+    } catch (error) {
+      console.error('Erro ao buscar próximo ID:', error);
+    } finally {
+      setBuscandoProximoId(false);
     }
   };
 
@@ -161,7 +180,14 @@ function Cadastro() {
 
     } catch (error) {
       console.error('Erro:', error);
-      setStatus(error.response?.data?.error || 'Erro ao salvar. Verifique o console.');
+      const mensagemErro = error.response?.data?.error || 'Erro ao salvar. Verifique o console.';
+      setStatus(mensagemErro);
+
+      // Se o ID já foi usado por outro cadastro feito nesse meio-tempo, já
+      // busca o próximo número livre para a pessoa só clicar em enviar de novo.
+      if (tipoCadastro === 'Novo' && mensagemErro.toLowerCase().includes('número de inscrição')) {
+        atualizarProximoId();
+      }
     }
   };
 
@@ -220,15 +246,33 @@ function Cadastro() {
           
           <div className="form-group">
             <label className="form-label">Número de Matrícula (ID):</label>
-            <input 
-              type="text" 
-              className="form-input" 
-              value={id} 
-              onChange={(e) => setId(e.target.value)}
-              readOnly={tipoCadastro === 'Novo'} 
-              placeholder={tipoCadastro === 'Renovação' ? "Digite a matrícula antiga" : "Gerado automaticamente"}
-              required 
-            />
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                type="text"
+                className="form-input"
+                value={id}
+                onChange={(e) => setId(e.target.value)}
+                readOnly={tipoCadastro === 'Novo'}
+                placeholder={tipoCadastro === 'Renovação' ? "Digite a matrícula antiga" : "Gerado automaticamente"}
+                style={{ flex: 1, minWidth: 0 }}
+                required
+              />
+              {tipoCadastro === 'Novo' && (
+                <button
+                  type="button"
+                  onClick={atualizarProximoId}
+                  disabled={buscandoProximoId}
+                  title="Buscar o próximo número livre agora (útil se outra pessoa cadastrou alguém enquanto esta tela estava aberta)"
+                  style={{
+                    flexShrink: 0, width: '45px', border: '1px solid #005c33', borderRadius: '6px',
+                    backgroundColor: '#005c33', color: 'white', fontSize: '20px', fontWeight: 'bold',
+                    cursor: buscandoProximoId ? 'wait' : 'pointer', lineHeight: 1,
+                  }}
+                >
+                  +
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -265,6 +309,8 @@ function Cadastro() {
             </label>
             <input
             type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
             className="form-input"
             placeholder="000.000.000-00"
             value={cpf}

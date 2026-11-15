@@ -82,7 +82,7 @@ function Pesquisa() {
     <div className="container" style={{ maxWidth: '900px', margin: '40px auto', padding: '0 20px' }}>
       <div style={{ textAlign: 'center', marginBottom: '30px' }}>
         <h2 style={{ color: '#005c33', marginBottom: '10px' }}>Consulta de Componentes</h2>
-        <p style={{ color: '#64748b' }}>Digite o nome ou o CPF para localizar a inscrição na planilha</p>
+        <p style={{ color: '#64748b' }}>Busque por nome, ID, CPF ou pela data em que o cadastro foi feito</p>
       </div>
 
       {/* Formulário de Busca */}
@@ -90,22 +90,33 @@ function Pesquisa() {
         <select
           className="form-input"
           value={campoBusca}
-          onChange={(e) => setCampoBusca(e.target.value)}
+          onChange={(e) => { setCampoBusca(e.target.value); setTermoBusca(''); }}
           style={{ flex: '1 1 120px', height: '45px', fontSize: '16px', minWidth: 0 }}
         >
           <option value="todos">Todos</option>
           <option value="id">ID</option>
           <option value="nome">Nome</option>
           <option value="cpf">CPF</option>
+          <option value="data">Data do Cadastro</option>
         </select>
-        <input
-          type="text"
-          className="form-input"
-          placeholder="Ex: Nome do componente ou CPF..."
-          value={termoBusca}
-          onChange={(e) => setTermoBusca(e.target.value)}
-          style={{ flex: '3 1 200px', height: '45px', fontSize: '16px', minWidth: 0 }}
-        />
+        {campoBusca === 'data' ? (
+          <input
+            type="date"
+            className="form-input"
+            value={termoBusca}
+            onChange={(e) => setTermoBusca(e.target.value)}
+            style={{ flex: '3 1 200px', height: '45px', fontSize: '16px', minWidth: 0 }}
+          />
+        ) : (
+          <input
+            type="text"
+            className="form-input"
+            placeholder="Ex: Nome do componente ou CPF..."
+            value={termoBusca}
+            onChange={(e) => setTermoBusca(e.target.value)}
+            style={{ flex: '3 1 200px', height: '45px', fontSize: '16px', minWidth: 0 }}
+          />
+        )}
         <button
           type="submit"
           className="btn-principal"
@@ -204,7 +215,9 @@ function Pesquisa() {
               }}>
                 RENOVADO: {componente.renovado === 'Sim' ? 'SIM' : 'NÃO'}
               </span>
-              <div style={{ fontSize: '12px', color: '#94a3b8' }}>Cadastrado em: {componente.data}</div>
+              {componente.data && (
+                <div style={{ fontSize: '12px', color: '#94a3b8' }}>Cadastrado em: {componente.data.split('-').reverse().join('/')}</div>
+              )}
             </div>
 
             {/* Botões de Ação */}

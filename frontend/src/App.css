@@ -5,6 +5,13 @@ body {
   padding: 0;
 }
 
+/* Pulso sutil no botão "+" de próximo ID, enquanto o formulário de Cadastro
+   Novo está travado esperando a confirmação do número */
+@keyframes pulsar-botao-id {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 92, 51, 0.5); }
+  50% { box-shadow: 0 0 0 6px rgba(0, 92, 51, 0); }
+}
+
 .container {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   max-width: 700px;
@@ -131,6 +138,21 @@ body {
 
 .btn-primary:hover {
   background-color: #004426;
+}
+
+.btn-primary:disabled {
+  background-color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.btn-secundario:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secundario:disabled:hover {
+  background-color: #ffffff;
+  color: #005c33;
 }
 
 .btn-principal {

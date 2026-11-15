@@ -37,6 +37,11 @@ function Cadastro() {
   const [gerandoCarteirinha, setGerandoCarteirinha] = useState(false);
   const [statusCarteirinha, setStatusCarteirinha] = useState('');
   const [buscandoProximoId, setBuscandoProximoId] = useState(false);
+  // Em "Cadastro Novo" o resto do formulário só libera depois que a pessoa
+  // aperta o "+" e confirma o número — assim o ID é sempre buscado na hora de
+  // começar a preencher, não no carregamento da página (que pode estar minutos
+  // defasado se outra pessoa já tiver cadastrado alguém nesse meio-tempo).
+  const [idConfirmado, setIdConfirmado] = useState(false);
 
   const webcamRef = useRef(null);
 
@@ -61,8 +66,10 @@ function Cadastro() {
     setTipoCadastro(tipo);
     if (tipo === 'Novo') {
       setId(idAutoGuardado); // Volta para o ID automático
+      setIdConfirmado(false); // Precisa apertar o "+" de novo para liberar o formulário
     } else {
       setId(''); // Limpa o campo para a pessoa digitar a carteirinha antiga
+      setIdConfirmado(true); // Renovação não depende do "+"
     }
   };
 
@@ -77,6 +84,7 @@ function Cadastro() {
       const resId = await api.get('/proximo-id');
       setIdAutoGuardado(resId.data.proximoId);
       setId(resId.data.proximoId);
+      setIdConfirmado(true);
     } catch (error) {
       console.error('Erro ao buscar próximo ID:', error);
     } finally {
@@ -169,11 +177,13 @@ function Cadastro() {
       setNome(''); setCpf(''); setCep(''); setRua(''); setBairro(''); setCidade('');
       setNumero(''); setComplemento(''); setAla(''); setFotoSrc(null); setDataNascimento('');
 
-      // Se for cadastro novo, atualiza o ID automático para o próximo
+      // Se for cadastro novo, atualiza o ID automático para o próximo e
+      // re-trava o formulário — a próxima pessoa precisa apertar "+" de novo
       if (tipoCadastro === 'Novo') {
         const resId = await api.get('/proximo-id');
         setIdAutoGuardado(resId.data.proximoId);
         setId(resId.data.proximoId);
+        setIdConfirmado(false);
       } else {
         setId('');
       }
@@ -219,6 +229,9 @@ function Cadastro() {
     }
   };
 
+  // Em "Cadastro Novo", o resto do formulário fica travado até apertar "+"
+  const formBloqueado = tipoCadastro === 'Novo' && !idConfirmado;
+
   return (
     <div className="container">
       <h2 className="titulo">Ficha de Inscrição</h2>
@@ -262,17 +275,23 @@ function Cadastro() {
                   type="button"
                   onClick={atualizarProximoId}
                   disabled={buscandoProximoId}
-                  title="Buscar o próximo número livre agora (útil se outra pessoa cadastrou alguém enquanto esta tela estava aberta)"
+                  title="Buscar o próximo número livre e liberar o formulário"
                   style={{
                     flexShrink: 0, width: '45px', border: '1px solid #005c33', borderRadius: '6px',
                     backgroundColor: '#005c33', color: 'white', fontSize: '20px', fontWeight: 'bold',
                     cursor: buscandoProximoId ? 'wait' : 'pointer', lineHeight: 1,
+                    animation: formBloqueado ? 'pulsar-botao-id 1.5s ease-in-out infinite' : 'none',
                   }}
                 >
                   +
                 </button>
               )}
             </div>
+            {formBloqueado && (
+              <p style={{ margin: '6px 0 0 0', fontSize: '12px', color: '#b45309', fontWeight: 'bold' }}>
+                Aperte o + para gerar o número e liberar o restante do formulário.
+              </p>
+            )}
           </div>
         </div>
 
@@ -288,7 +307,8 @@ function Cadastro() {
             placeholder="Digite o nome completo"
             value={nome}
             onChange={(e) => setNome(e.target.value)}
-            style={{ 
+            disabled={formBloqueado}
+            style={{
             width: '100%', 
             padding: '12px', 
             borderRadius: '6px', 
@@ -315,7 +335,8 @@ function Cadastro() {
             placeholder="000.000.000-00"
             value={cpf}
             onChange={handleCpfChange}
-            style={{ 
+            disabled={formBloqueado}
+            style={{
                 width: '100%', 
                 padding: '12px', 
                 borderRadius: '6px', 
@@ -337,7 +358,8 @@ function Cadastro() {
             placeholder="(11) 99999-9999"
             value={telefone}
             onChange={(e) => setTelefone(e.target.value)}
-            style={{ 
+            disabled={formBloqueado}
+            style={{
                 width: '100%', 
                 padding: '12px', 
                 borderRadius: '6px', 
@@ -358,6 +380,7 @@ function Cadastro() {
                 className="form-input"
                 value={dataNascimento}
                 onChange={(e) => setDataNascimento(e.target.value)}
+                disabled={formBloqueado}
                 style={{
                     flex: 1,
                     minWidth: 0,
@@ -388,42 +411,42 @@ function Cadastro() {
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">CEP:</label>
-            <input type="text" className="form-input" value={cep} onChange={handleCepChange} required />
+            <input type="text" className="form-input" value={cep} onChange={handleCepChange} disabled={formBloqueado} required />
             {carregandoCep && <span className="erro-texto">Buscando...</span>}
             {!carregandoCep && erroCep && <span className="erro-texto">{erroCep}</span>}
           </div>
           <div className="form-group flex-2">
             <label className="form-label">Rua / Logradouro:</label>
-            <input type="text" className="form-input" value={rua} onChange={(e) => setRua(e.target.value.toUpperCase())} required />
+            <input type="text" className="form-input" value={rua} onChange={(e) => setRua(e.target.value.toUpperCase())} disabled={formBloqueado} required />
           </div>
         </div>
 
         <div className="form-row">
           <div className="form-group flex-2">
             <label className="form-label">Bairro:</label>
-            <input type="text" className="form-input" value={bairro} onChange={(e) => setBairro(e.target.value.toUpperCase())} required />
+            <input type="text" className="form-input" value={bairro} onChange={(e) => setBairro(e.target.value.toUpperCase())} disabled={formBloqueado} required />
           </div>
           <div className="form-group">
             <label className="form-label">Cidade:</label>
-            <input type="text" className="form-input" value={cidade} onChange={(e) => setCidade(e.target.value.toUpperCase())} required />
+            <input type="text" className="form-input" value={cidade} onChange={(e) => setCidade(e.target.value.toUpperCase())} disabled={formBloqueado} required />
           </div>
         </div>
 
         <div className="form-row">
           <div className="form-group">
             <label className="form-label">Número:</label>
-            <input type="text" className="form-input" value={numero} onChange={(e) => setNumero(e.target.value)} required />
+            <input type="text" className="form-input" value={numero} onChange={(e) => setNumero(e.target.value)} disabled={formBloqueado} required />
           </div>
           <div className="form-group">
             <label className="form-label">Complemento:</label>
-            <input type="text" className="form-input" value={complemento} onChange={(e) => setComplemento(e.target.value)} />
+            <input type="text" className="form-input" value={complemento} onChange={(e) => setComplemento(e.target.value)} disabled={formBloqueado} />
           </div>
         </div>
 
         <div className="form-row">
           <div className="form-group flex-2">
             <label className="form-label">Ala do Desfile:</label>
-            <select className="form-input" value={ala} onChange={(e) => setAla(e.target.value)} required>
+            <select className="form-input" value={ala} onChange={(e) => setAla(e.target.value)} disabled={formBloqueado} required>
               <option value="">Selecione a Ala...</option>
               {alasLista.length > 0 ? (
                 alasLista.map((nomeAla, idx) => (
@@ -436,7 +459,7 @@ function Cadastro() {
           </div>
           <div className="form-group">
             <label className="form-label">Data:</label>
-            <input type="date" className="form-input" value={data} onChange={(e) => setData(e.target.value)} required />
+            <input type="date" className="form-input" value={data} onChange={(e) => setData(e.target.value)} disabled={formBloqueado} required />
           </div>
         </div>
 
@@ -503,7 +526,7 @@ function Cadastro() {
                   A câmera está desligada para economizar recursos e memória. <br/>
                   Clique no botão abaixo para ativar a lente e tirar a foto.
                 </p>
-                <button type="button" className="btn-secundario" style={{ backgroundColor: '#005c33', color: 'white', border: 'none' }} onClick={alternarCamera}>
+                <button type="button" className="btn-secundario" style={{ backgroundColor: '#005c33', color: 'white', border: 'none' }} onClick={alternarCamera} disabled={formBloqueado}>
                   ATIVAR WEBCAM
                 </button>
               </div>
@@ -512,7 +535,7 @@ function Cadastro() {
           </div>
         </div>
 
-        <button type="submit" className="btn-primary">Finalizar Inscrição</button>
+        <button type="submit" className="btn-primary" disabled={formBloqueado}>Finalizar Inscrição</button>
       </form>
 
       {status && (
